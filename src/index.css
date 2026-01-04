@@ -1,0 +1,31 @@
+@import "tailwindcss";
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+@font-face {
+  font-family: GoogleSansRegular;
+  src: url('./assets/fonts/GoogleSansFlex_9pt-Regular.ttf');
+}
+
+@font-face {
+  font-family: GoogleSansBold;
+  src: url('./assets/fonts/GoogleSansFlex_9pt-Bold.ttf');
+}
+
+@theme{
+  --color-textcol: #333333;
+  --color-background: #ffffff;
+  --color-primary: #0074FF;
+  --color-secondary: #9333ea;
+  --color-accent: #F1317E;
+  --color-textcol-dark: #f3f4f6;
+  --color-background-dark: #000932;
+  --color-primary-dark: #00BFFF;
+  --color-secondary-dark: #a78bfa;
+
+  --font-google: 'GoogleSansRegular', "sans-serif";
+  --font-google-bold: 'GoogleSansBold', "sans-serif";
+}
+
+:root{
+  font-family: GoogleSansRegular;
+}
