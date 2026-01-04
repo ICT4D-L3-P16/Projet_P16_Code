@@ -51,6 +51,24 @@ const CorrectionResults: React.FC = () => {
     URL.revokeObjectURL(url)
   }
 
+  // Fetch history from API
+  const [history, setHistory] = useState<any[] | null>(null)
+  const [loadingHistory, setLoadingHistory] = useState(false)
+
+  const refreshHistory = async () => {
+    setLoadingHistory(true)
+    try {
+      const api = await import('../lib/correctionApi')
+      const data = await api.default.getResults()
+      setHistory(data)
+    } catch (err) {
+      console.error('Impossible de charger l\'historique', err)
+      setHistory(null)
+    } finally {
+      setLoadingHistory(false)
+    }
+  }
+
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       <div className="bg-linear-to-br from-primary/10 via-primary/5 to-transparent rounded-2xl p-8 border border-primary/20 flex items-start justify-between">
@@ -75,6 +93,9 @@ const CorrectionResults: React.FC = () => {
         <div className="flex items-center gap-3">
           <button onClick={downloadJson} className="px-4 py-2 bg-primary text-white rounded-xl">Télécharger JSON</button>
           <button onClick={() => navigate('/dashboard/examens')} className="px-4 py-2 bg-background rounded-xl">Retour aux examens</button>
+          <button onClick={refreshHistory} disabled={loadingHistory} className="px-4 py-2 bg-indigo-600 text-white rounded-xl">
+            {loadingHistory ? 'Chargement...' : 'Rafraîchir l\'historique'}
+          </button>
         </div>
       </div>
 
@@ -144,6 +165,30 @@ const CorrectionResults: React.FC = () => {
               )}
             </div>
           ))}
+        </div>
+
+        {/* History list fetched from API */}
+        <div className="mt-6">
+          <h3 className="text-lg font-google-bold mb-3">Historique corrections</h3>
+          <div className="space-y-2">
+            {history ? (
+              history.length === 0 ? <div className="text-textcol/70">Aucun résultat enregistré</div> : (
+                history.map((h: any) => (
+                  <div key={h.id} className="p-3 border rounded-lg bg-background flex items-center justify-between">
+                    <div>
+                      <div className="font-google-bold">{h.transcriptions?.nom_fichier || `id:${h.id}`}</div>
+                      <div className="text-sm text-textcol/70">Note: <span className="font-google-bold">{h.note_totale}</span> • <span className="text-xs text-textcol/50">{new Date(h.transcriptions?.created_at || h.created_at || '').toLocaleString()}</span></div>
+                    </div>
+                    <div>
+                      <button onClick={() => navigator.clipboard.writeText(JSON.stringify(h.details || h.details_json || h))} className="px-3 py-2 bg-primary text-white rounded-lg">Copier JSON</button>
+                    </div>
+                  </div>
+                ))
+              )
+            ) : (
+              <div className="text-textcol/70">Appuyez sur "Rafraîchir l'historique" pour charger</div>
+            )}
+          </div>
         </div>
       </div>
     </div>

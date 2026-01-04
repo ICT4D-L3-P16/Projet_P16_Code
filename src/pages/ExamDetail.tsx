@@ -24,135 +24,156 @@ const ExamDetail: React.FC = () => {
       return
     }
 
+    // If epreuve or corrige is missing, ask user to confirm proceeding
+    if (!exam.epreuve || !exam.corrige) {
+      const missing = [!exam.epreuve ? 'épreuve' : null, !exam.corrige ? 'corrigé' : null].filter(Boolean).join(' et ')
+      const ok = window.confirm(`Aucun ${missing} détecté. Voulez-vous continuer la correction sans ces documents ?`)
+      if (!ok) return
+    }
+
     setGrading(true)
-    setGradingProgress(0)
+    setGradingProgress(5)
 
-    // Simulate processing progress
-    await new Promise<void>((resolve) => {
-      const interval = setInterval(() => {
-        setGradingProgress((p) => {
-          const step = Math.floor(Math.random() * 12) + 6 // 6..18
-          const next = Math.min(100, p + step)
-          if (next >= 100) {
-            clearInterval(interval)
-            resolve()
-          }
-          return next
-        })
-      }, 400)
-    })
+    // Build list of remote files (epreuve, corrige, copies)
+    const urls: { url: string; filename?: string }[] = []
+    if (exam.epreuve?.cheminFichier) urls.push({ url: exam.epreuve.cheminFichier, filename: exam.epreuve.nomFichier })
+    if (exam.corrige?.cheminFichier) urls.push({ url: exam.corrige.cheminFichier, filename: exam.corrige.nomFichier })
+    exam.copies.forEach((c) => c.url && urls.push({ url: c.url, filename: c.name }))
 
-    // Create mocked results with richer details: types, weights (barêmes), and teacher comments
-    const mockResults = {
-      examId: exam.id,
-      generatedAt: Date.now(),
-      summary: {},
-      copies: exam.copies.map((c) => {
-        const numQuestions = 5
-
-        // helper to choose weighted random type
-        const chooseType = () => {
-          const r = Math.random()
-          if (r < 0.5) return 'mcq'
-          if (r < 0.8) return 'short'
-          return 'essay'
-        }
-
-        const commentsPool = {
-          full: ['Très bonne réponse', 'Excellent', 'Réponse complète'],
-          partial: ['Réponse partielle, développer un exemple', 'Manque de précision', 'Bonne idée, mais manque de détails'],
-          zero: ['Réponse incorrecte', 'Hors sujet', 'Aucune réponse']
-        }
-
-        const questions = Array.from({ length: numQuestions }).map((_, qIdx) => {
-          const type = chooseType()
-          // set maxPoints depending on type
-          let maxPoints = 1
-          if (type === 'mcq') maxPoints = Math.floor(Math.random() * 2) + 1 // 1..2
-          if (type === 'short') maxPoints = Math.floor(Math.random() * 3) + 2 // 2..4
-          if (type === 'essay') maxPoints = Math.floor(Math.random() * 4) + 3 // 3..6
-
-          // scoring rules per type
-          let points = 0
-          let comment = ''
-          if (type === 'mcq') {
-            const correct = Math.random() < 0.6
-            points = correct ? maxPoints : 0
-            comment = correct ? commentsPool.full[Math.floor(Math.random() * commentsPool.full.length)] : commentsPool.zero[Math.floor(Math.random() * commentsPool.zero.length)]
-          } else if (type === 'short') {
-            // partial chance
-            const p = Math.random()
-            if (p < 0.25) points = 0
-            else if (p < 0.65) points = Math.floor(Math.random() * (maxPoints - 0)) // partial 0..max-1
-            else points = maxPoints
-            comment = points === maxPoints ? commentsPool.full[Math.floor(Math.random() * commentsPool.full.length)] : points === 0 ? commentsPool.zero[Math.floor(Math.random() * commentsPool.zero.length)] : commentsPool.partial[Math.floor(Math.random() * commentsPool.partial.length)]
-          } else {
-            // essay: more nuanced partials and richer comments
-            const p = Math.random()
-            if (p < 0.15) points = 0
-            else if (p < 0.5) points = Math.floor(Math.random() * Math.max(1, Math.floor(maxPoints / 2))) // small partial
-            else if (p < 0.85) points = Math.floor(Math.random() * (maxPoints - 1)) + 1 // medium partial
-            else points = maxPoints
-            comment = points === maxPoints ? 'Très bon développement, arguments et exemples pertinents' : points === 0 ? 'Travail insuffisant, développer vos arguments' : 'Bonne structure, développer davantage certains points'
-          }
-
-          const status = points === 0 ? 'zero' : points === maxPoints ? 'full' : 'partial'
-          const color = status === 'full' ? 'green' : status === 'partial' ? 'blue' : 'red'
-
-          return {
-            question: qIdx + 1,
-            type,
-            reponse: type === 'mcq' ? ['A', 'B', 'C', 'D'][Math.floor(Math.random() * 4)] : (Math.random() < 0.5 ? 'Réponse courte' : 'Réponse rédigée'),
-            maxPoints,
-            points,
-            status,
-            color,
-            comment
-          }
-        })
-
-        const note = questions.reduce((a, b) => a + b.points, 0)
-        const maxNote = questions.reduce((a, b) => a + b.maxPoints, 0)
-        const pourcent = Number(((note / (maxNote || 1)) * 100).toFixed(1))
-
-        return {
-          id: c.id,
-          nomEleve: c.name,
-          note,
-          maxNote,
-          pourcent,
-          details: questions
-        }
-      })
-    }
-
-    // compute summary including distribution and median
-    const total = mockResults.copies.length
-    const percents = mockResults.copies.map((c: any) => c.pourcent).sort((a: number, b: number) => a - b)
-    const moy = total > 0 ? Number((percents.reduce((a: number, b: number) => a + b, 0) / total).toFixed(2)) : 0
-    const min = percents[0] ?? 0
-    const max = percents[percents.length - 1] ?? 0
-    const median = total > 0 ? percents[Math.floor(total / 2)] : 0
-    const distribution = {
-      excellent: mockResults.copies.filter((c: any) => c.pourcent >= 80).length,
-      pass: mockResults.copies.filter((c: any) => c.pourcent >= 50 && c.pourcent < 80).length,
-      fail: mockResults.copies.filter((c: any) => c.pourcent < 50).length
-    }
-
-    mockResults.summary = { total, graded: total, moyenne: moy, min, max, median, distribution }
-
-    // persist in session for refresh resilience
     try {
-      sessionStorage.setItem(`correction_${exam.id}`, JSON.stringify(mockResults))
-    } catch (e) {
-      console.warn('sessionStorage unavailable')
+      // Progress simulation while waiting for server
+      const interval = setInterval(() => setGradingProgress((p) => Math.min(95, p + Math.floor(Math.random() * 8) + 2)), 500)
+
+      // Try to submit remote files to the real API
+      try {
+        const api = await import('../lib/correctionApi')
+        const resp = await api.default.submitRemoteUrls(urls)
+
+        clearInterval(interval)
+        setGradingProgress(100)
+
+        // Map API response to internal format (best-effort)
+        // API example: { resultat: { "copie_1": { note_totale: 14.5, questions: [{ num, point, commentaire }] } } }
+        const data = resp?.resultat || resp
+        const copiesFromApi: any[] = []
+        const apiKeys = Object.keys(data || {})
+        // map in order of exam.copies when possible
+        for (let i = 0; i < apiKeys.length; i++) {
+          const key = apiKeys[i]
+          const entry = data[key]
+          const originalCopy = exam.copies[i]
+          const details = (entry.questions || []).map((q: any) => ({
+            question: q.num,
+            type: q.type || 'auto',
+            reponse: q.reponse || '–',
+            maxPoints: q.maxPoint || q.point || 1,
+            points: q.point || 0,
+            status: (q.point || 0) === 0 ? 'zero' : (q.point || 0) === (q.maxPoint || q.point || 1) ? 'full' : 'partial',
+            comment: q.commentaire || q.comment || ''
+          }))
+          const note = entry.note_totale ?? details.reduce((a: number, b: any) => a + b.points, 0)
+          const maxNote = details.reduce((a: number, b: any) => a + b.maxPoints, 0)
+          const pourcent = Number(((note / (maxNote || 1)) * 100).toFixed(1))
+          copiesFromApi.push({ id: originalCopy?.id || key, nomEleve: originalCopy?.name || key, note, maxNote, pourcent, details })
+        }
+
+        const mockResults = { examId: exam.id, generatedAt: Date.now(), summary: {}, copies: copiesFromApi }
+        const total = mockResults.copies.length
+        const percents = mockResults.copies.map((c: any) => c.pourcent).sort((a: number, b: number) => a - b)
+        const moy = total > 0 ? Number((percents.reduce((a: number, b: number) => a + b, 0) / total).toFixed(2)) : 0
+        const min = percents[0] ?? 0
+        const max = percents[percents.length - 1] ?? 0
+        const median = total > 0 ? percents[Math.floor(total / 2)] : 0
+        const distribution = { excellent: mockResults.copies.filter((c: any) => c.pourcent >= 80).length, pass: mockResults.copies.filter((c: any) => c.pourcent >= 50 && c.pourcent < 80).length, fail: mockResults.copies.filter((c: any) => c.pourcent < 50).length }
+        mockResults.summary = { total, graded: total, moyenne: moy, min, max, median, distribution }
+
+        // persist and navigate
+        try { sessionStorage.setItem(`correction_${exam.id}`, JSON.stringify(mockResults)) } catch (e) { console.warn('sessionStorage unavailable') }
+        setGrading(false)
+        setGradingProgress(0)
+        navigate(`/dashboard/examens/${exam.id}/resultats`, { state: { results: mockResults } })
+        return
+      } catch (err) {
+        console.warn('API submit failed, falling back to mock', err)
+        // fall through to generate local mock
+      }
+    } catch (err) {
+      console.error('Erreur pendant la soumission :', err)
     }
 
-    setGrading(false)
-    setGradingProgress(0)
+    // If API failed, fallback to locally-generated mock (previous behaviour)
+    try {
+      // keep previous simulated generator for fallback
+      const mockResults = {
+        examId: exam.id,
+        generatedAt: Date.now(),
+        summary: {},
+        copies: exam.copies.map((c) => {
+          const numQuestions = 5
+          const chooseType = () => {
+            const r = Math.random()
+            if (r < 0.5) return 'mcq'
+            if (r < 0.8) return 'short'
+            return 'essay'
+          }
+          const commentsPool = { full: ['Très bonne réponse', 'Excellent', 'Réponse complète'], partial: ['Réponse partielle, développer un exemple', 'Manque de précision', 'Bonne idée, mais manque de détails'], zero: ['Réponse incorrecte', 'Hors sujet', 'Aucune réponse'] }
+          const questions = Array.from({ length: numQuestions }).map((_, qIdx) => {
+            const type = chooseType()
+            let maxPoints = 1
+            if (type === 'mcq') maxPoints = Math.floor(Math.random() * 2) + 1
+            if (type === 'short') maxPoints = Math.floor(Math.random() * 3) + 2
+            if (type === 'essay') maxPoints = Math.floor(Math.random() * 4) + 3
+            let points = 0
+            let comment = ''
+            if (type === 'mcq') {
+              const correct = Math.random() < 0.6
+              points = correct ? maxPoints : 0
+              comment = correct ? commentsPool.full[Math.floor(Math.random() * commentsPool.full.length)] : commentsPool.zero[Math.floor(Math.random() * commentsPool.zero.length)]
+            } else if (type === 'short') {
+              const p = Math.random()
+              if (p < 0.25) points = 0
+              else if (p < 0.65) points = Math.floor(Math.random() * (maxPoints - 0))
+              else points = maxPoints
+              comment = points === maxPoints ? commentsPool.full[Math.floor(Math.random() * commentsPool.full.length)] : points === 0 ? commentsPool.zero[Math.floor(Math.random() * commentsPool.zero.length)] : commentsPool.partial[Math.floor(Math.random() * commentsPool.partial.length)]
+            } else {
+              const p = Math.random()
+              if (p < 0.15) points = 0
+              else if (p < 0.5) points = Math.floor(Math.random() * Math.max(1, Math.floor(maxPoints / 2)))
+              else if (p < 0.85) points = Math.floor(Math.random() * (maxPoints - 1)) + 1
+              else points = maxPoints
+              comment = points === maxPoints ? 'Très bon développement, arguments et exemples pertinents' : points === 0 ? 'Travail insuffisant, développer vos arguments' : 'Bonne structure, développer davantage certains points'
+            }
+            const status = points === 0 ? 'zero' : points === maxPoints ? 'full' : 'partial'
+            const color = status === 'full' ? 'green' : status === 'partial' ? 'blue' : 'red'
+            return { question: qIdx + 1, type, reponse: type === 'mcq' ? ['A', 'B', 'C', 'D'][Math.floor(Math.random() * 4)] : (Math.random() < 0.5 ? 'Réponse courte' : 'Réponse rédigée'), maxPoints, points, status, color, comment }
+          })
+          const note = questions.reduce((a, b) => a + b.points, 0)
+          const maxNote = questions.reduce((a, b) => a + b.maxPoints, 0)
+          const pourcent = Number(((note / (maxNote || 1)) * 100).toFixed(1))
+          return { id: c.id, nomEleve: c.name, note, maxNote, pourcent, details: questions }
+        })
+      }
 
-    // navigate to results page with state
-    navigate(`/dashboard/examens/${exam.id}/resultats`, { state: { results: mockResults } })
+      const total = mockResults.copies.length
+      const percents = mockResults.copies.map((c: any) => c.pourcent).sort((a: number, b: number) => a - b)
+      const moy = total > 0 ? Number((percents.reduce((a: number, b: number) => a + b, 0) / total).toFixed(2)) : 0
+      const min = percents[0] ?? 0
+      const max = percents[percents.length - 1] ?? 0
+      const median = total > 0 ? percents[Math.floor(total / 2)] : 0
+      const distribution = { excellent: mockResults.copies.filter((c: any) => c.pourcent >= 80).length, pass: mockResults.copies.filter((c: any) => c.pourcent >= 50 && c.pourcent < 80).length, fail: mockResults.copies.filter((c: any) => c.pourcent < 50).length }
+      mockResults.summary = { total, graded: total, moyenne: moy, min, max, median, distribution }
+
+      try { sessionStorage.setItem(`correction_${exam.id}`, JSON.stringify(mockResults)) } catch (e) { console.warn('sessionStorage unavailable') }
+      setGrading(false)
+      setGradingProgress(0)
+      navigate(`/dashboard/examens/${exam.id}/resultats`, { state: { results: mockResults } })
+
+    } catch (err) {
+      console.error('Erreur pendant la création du mock fallback', err)
+      setGrading(false)
+      setGradingProgress(0)
+      alert('Erreur pendant la correction (API et fallback ont échoué)')
+    }
   }
 
   const exam = exams.find((e) => e.id === id)
@@ -403,7 +424,7 @@ const ExamDetail: React.FC = () => {
                 onClick={handleCorrection}
                 id="btn-corriger"
                 className="w-full px-6 py-3 bg-indigo-600 text-white rounded-xl font-google-bold hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                disabled={grading || exam.copies.length === 0 || !exam.epreuve || !exam.corrige}
+                disabled={grading || exam.copies.length === 0}
               >
                 {grading ? (
                   <>
@@ -414,7 +435,13 @@ const ExamDetail: React.FC = () => {
                   'Corriger les copies'
                 )}
               </button>
-              <p className="text-sm text-textcol/60 mt-2">Le bouton lancera une correction simulée (mock API).</p>
+              <p className="text-sm text-textcol/60 mt-2">Le bouton lancera une correction (API ou simulation). Si aucune épreuve ou corrigé n'est présent, vous serez invité à confirmer.</p>
+
+              {( !exam.epreuve || !exam.corrige ) && (
+                <div className="mt-3 text-sm text-yellow-700 bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-md">
+                  <strong>Attention:</strong> { !exam.epreuve ? 'Aucune épreuve' : '' } { !exam.corrige ? 'Aucun corrigé' : '' } détecté(s). La correction sera effectuée sans document de référence.
+                </div>
+              )}
             </div>
           </div>
         </div>
