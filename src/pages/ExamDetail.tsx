@@ -12,6 +12,149 @@ const ExamDetail: React.FC = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
+  // Correction simulation state
+  const [grading, setGrading] = useState(false)
+  const [gradingProgress, setGradingProgress] = useState(0)
+
+  const handleCorrection = async () => {
+    if (grading) return
+    if (!exam) return
+    if (exam.copies.length === 0) {
+      alert('Aucune copie à corriger')
+      return
+    }
+
+    setGrading(true)
+    setGradingProgress(0)
+
+    // Simulate processing progress
+    await new Promise<void>((resolve) => {
+      const interval = setInterval(() => {
+        setGradingProgress((p) => {
+          const step = Math.floor(Math.random() * 12) + 6 // 6..18
+          const next = Math.min(100, p + step)
+          if (next >= 100) {
+            clearInterval(interval)
+            resolve()
+          }
+          return next
+        })
+      }, 400)
+    })
+
+    // Create mocked results with richer details: types, weights (barêmes), and teacher comments
+    const mockResults = {
+      examId: exam.id,
+      generatedAt: Date.now(),
+      summary: {},
+      copies: exam.copies.map((c) => {
+        const numQuestions = 5
+
+        // helper to choose weighted random type
+        const chooseType = () => {
+          const r = Math.random()
+          if (r < 0.5) return 'mcq'
+          if (r < 0.8) return 'short'
+          return 'essay'
+        }
+
+        const commentsPool = {
+          full: ['Très bonne réponse', 'Excellent', 'Réponse complète'],
+          partial: ['Réponse partielle, développer un exemple', 'Manque de précision', 'Bonne idée, mais manque de détails'],
+          zero: ['Réponse incorrecte', 'Hors sujet', 'Aucune réponse']
+        }
+
+        const questions = Array.from({ length: numQuestions }).map((_, qIdx) => {
+          const type = chooseType()
+          // set maxPoints depending on type
+          let maxPoints = 1
+          if (type === 'mcq') maxPoints = Math.floor(Math.random() * 2) + 1 // 1..2
+          if (type === 'short') maxPoints = Math.floor(Math.random() * 3) + 2 // 2..4
+          if (type === 'essay') maxPoints = Math.floor(Math.random() * 4) + 3 // 3..6
+
+          // scoring rules per type
+          let points = 0
+          let comment = ''
+          if (type === 'mcq') {
+            const correct = Math.random() < 0.6
+            points = correct ? maxPoints : 0
+            comment = correct ? commentsPool.full[Math.floor(Math.random() * commentsPool.full.length)] : commentsPool.zero[Math.floor(Math.random() * commentsPool.zero.length)]
+          } else if (type === 'short') {
+            // partial chance
+            const p = Math.random()
+            if (p < 0.25) points = 0
+            else if (p < 0.65) points = Math.floor(Math.random() * (maxPoints - 0)) // partial 0..max-1
+            else points = maxPoints
+            comment = points === maxPoints ? commentsPool.full[Math.floor(Math.random() * commentsPool.full.length)] : points === 0 ? commentsPool.zero[Math.floor(Math.random() * commentsPool.zero.length)] : commentsPool.partial[Math.floor(Math.random() * commentsPool.partial.length)]
+          } else {
+            // essay: more nuanced partials and richer comments
+            const p = Math.random()
+            if (p < 0.15) points = 0
+            else if (p < 0.5) points = Math.floor(Math.random() * Math.max(1, Math.floor(maxPoints / 2))) // small partial
+            else if (p < 0.85) points = Math.floor(Math.random() * (maxPoints - 1)) + 1 // medium partial
+            else points = maxPoints
+            comment = points === maxPoints ? 'Très bon développement, arguments et exemples pertinents' : points === 0 ? 'Travail insuffisant, développer vos arguments' : 'Bonne structure, développer davantage certains points'
+          }
+
+          const status = points === 0 ? 'zero' : points === maxPoints ? 'full' : 'partial'
+          const color = status === 'full' ? 'green' : status === 'partial' ? 'blue' : 'red'
+
+          return {
+            question: qIdx + 1,
+            type,
+            reponse: type === 'mcq' ? ['A', 'B', 'C', 'D'][Math.floor(Math.random() * 4)] : (Math.random() < 0.5 ? 'Réponse courte' : 'Réponse rédigée'),
+            maxPoints,
+            points,
+            status,
+            color,
+            comment
+          }
+        })
+
+        const note = questions.reduce((a, b) => a + b.points, 0)
+        const maxNote = questions.reduce((a, b) => a + b.maxPoints, 0)
+        const pourcent = Number(((note / (maxNote || 1)) * 100).toFixed(1))
+
+        return {
+          id: c.id,
+          nomEleve: c.name,
+          note,
+          maxNote,
+          pourcent,
+          details: questions
+        }
+      })
+    }
+
+    // compute summary including distribution and median
+    const total = mockResults.copies.length
+    const percents = mockResults.copies.map((c: any) => c.pourcent).sort((a: number, b: number) => a - b)
+    const moy = total > 0 ? Number((percents.reduce((a: number, b: number) => a + b, 0) / total).toFixed(2)) : 0
+    const min = percents[0] ?? 0
+    const max = percents[percents.length - 1] ?? 0
+    const median = total > 0 ? percents[Math.floor(total / 2)] : 0
+    const distribution = {
+      excellent: mockResults.copies.filter((c: any) => c.pourcent >= 80).length,
+      pass: mockResults.copies.filter((c: any) => c.pourcent >= 50 && c.pourcent < 80).length,
+      fail: mockResults.copies.filter((c: any) => c.pourcent < 50).length
+    }
+
+    mockResults.summary = { total, graded: total, moyenne: moy, min, max, median, distribution }
+
+    // persist in session for refresh resilience
+    try {
+      sessionStorage.setItem(`correction_${exam.id}`, JSON.stringify(mockResults))
+    } catch (e) {
+      console.warn('sessionStorage unavailable')
+    }
+
+    setGrading(false)
+    setGradingProgress(0)
+
+    // navigate to results page with state
+    navigate(`/dashboard/examens/${exam.id}/resultats`, { state: { results: mockResults } })
+  }
+
   const exam = exams.find((e) => e.id === id)
 
   useEffect(() => {
@@ -253,6 +396,26 @@ const ExamDetail: React.FC = () => {
                 </div>
               )}
             </div>
+
+            {/* Corriger Button */}
+            <div className="mt-6">
+              <button
+                onClick={handleCorrection}
+                id="btn-corriger"
+                className="w-full px-6 py-3 bg-indigo-600 text-white rounded-xl font-google-bold hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                disabled={grading || exam.copies.length === 0 || !exam.epreuve || !exam.corrige}
+              >
+                {grading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Correction en cours...
+                  </>
+                ) : (
+                  'Corriger les copies'
+                )}
+              </button>
+              <p className="text-sm text-textcol/60 mt-2">Le bouton lancera une correction simulée (mock API).</p>
+            </div>
           </div>
         </div>
 
@@ -401,6 +564,38 @@ const ExamDetail: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Grading Modal */}
+      {grading && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-surface rounded-2xl p-8 max-w-md w-full shadow-2xl">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-indigo-600 dark:text-indigo-400">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-google-bold text-textcol">Traitement des copies</h3>
+                <p className="text-sm text-textcol/70 mt-1">La correction est en cours. Ceci est une simulation.</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-textcol/70">Progression</span>
+                <span className="font-google-bold text-indigo-600">{Math.round(gradingProgress)}%</span>
+              </div>
+              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+                <div
+                  className="bg-indigo-600 h-full transition-all duration-300 rounded-full"
+                  style={{ width: `${gradingProgress}%` }}
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete Modal */}
       {showDeleteModal && (

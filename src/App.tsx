@@ -15,6 +15,7 @@ import { Statistiques } from './components/Dashboard/Statistiques'
 import { Support } from './components/Dashboard/Support'
 import { Parametres } from './components/Dashboard/Parametre'
 import ExamDetail from './pages/ExamDetail'
+import CorrectionResults from './pages/CorrectionResults'
 import ExamsProvider from './exams'
 
 function App() {
@@ -42,6 +43,7 @@ function App() {
             {/* Routes relatives : /dashboard/examens, etc. */}
             <Route path="examens" element={<Examens />} />
             <Route path="examens/:id" element={<ExamDetail />} />
+            <Route path="examens/:id/resultats" element={<CorrectionResults />} />
             <Route path="statistiques" element={<Statistiques />} />
             <Route path="support" element={<Support />} />
             <Route path="parametres" element={<Parametres />} />
