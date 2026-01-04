@@ -13,14 +13,17 @@
 
 @theme{
   --color-textcol: #333333;
-  --color-background: #ffffff;
-  --color-primary: #0074FF;
+  --color-background: #F6F6F8;
+  --color-primary: #00BFFF;
   --color-secondary: #9333ea;
+  --color-surface: #FFFFFF;
   --color-accent: #F1317E;
+  
   --color-textcol-dark: #f3f4f6;
-  --color-background-dark: #000932;
+  --color-background-dark: #101622;
   --color-primary-dark: #00BFFF;
   --color-secondary-dark: #a78bfa;
+  --color-surface-dark: #111827;
 
   --font-google: 'GoogleSansRegular', "sans-serif";
   --font-google-bold: 'GoogleSansBold', "sans-serif";
@@ -28,4 +31,25 @@
 
 :root{
   font-family: GoogleSansRegular;
+}
+
+/* Light / dark theme variables applied to the document element */
+:root {
+  --color-textcol: #333333;
+  --color-background: #ffffff;
+  --color-primary: #0074FF;
+}
+
+html[data-theme='dark'] {
+  --color-textcol: var(--color-textcol-dark);
+  --color-background: var(--color-background-dark);
+  --color-primary: var(--color-primary-dark);
+  --color-surface: var(--color-surface-dark);
+}
+
+
+body {
+  background: var(--color-background);
+  color: var(--color-textcol);
+  font-family: var(--font-google);
 }
