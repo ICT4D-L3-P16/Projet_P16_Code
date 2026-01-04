@@ -34,10 +34,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, setIsCollapsed })
     return (
         <aside className={`${isCollapsed ? 'w-20' : 'w-64'} bg-surface border-r border-gray-200 dark:border-gray-800 transition-all duration-300 flex flex-col h-screen sticky top-0`}>
             <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
-                <div className="flex items-center gap-3">
+                <Link to="/" className="flex items-center gap-3">
                     <img src={sajeLogo} alt="SAJE" className="w-10 h-10" />
                     {!isCollapsed && <span className="font-google-bold text-xl text-textcol">SAJE</span>}
-                </div>
+                </Link>
                 <button onClick={() => setIsCollapsed(!isCollapsed)} className="p-2 hover:bg-background rounded-lg transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`w-5 h-5 transition-transform ${isCollapsed ? 'rotate-180' : ''}`}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5" />

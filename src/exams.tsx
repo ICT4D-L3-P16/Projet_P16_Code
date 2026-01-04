@@ -72,6 +72,8 @@ export const ExamsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Charger les examens de l'utilisateur au montage
   useEffect(() => {
+    console.debug('[ExamsProvider] session/user changed', { session: !!session, userId: user?.id })
+
     if (session && user) {
       refreshExams()
     } else {
@@ -85,6 +87,7 @@ export const ExamsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!user) return
 
     try {
+      console.debug('[ExamsProvider] refreshExams start for user', user.id)
       setIsLoading(true)
       setError(null)
 

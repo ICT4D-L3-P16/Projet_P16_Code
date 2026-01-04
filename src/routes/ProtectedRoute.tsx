@@ -5,9 +5,9 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import type { ReactNode } from 'react'
 export const ProtectedRoute: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const { isAuthenticated, isLoading } = useAuth()
+    const { isAuthenticated, loading } = useAuth()
 
-    if (isLoading) {
+    if (loading) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-background">
                 <div className="text-center">

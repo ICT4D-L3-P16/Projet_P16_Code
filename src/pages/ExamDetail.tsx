@@ -121,7 +121,7 @@ const ExamDetail: React.FC = () => {
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
       {/* Header Section */}
-      <div className="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent rounded-2xl p-8 border border-primary/20">
+      <div className="bg-linear-to-br from-primary/10 via-primary/5 to-transparent rounded-2xl p-8 border border-primary/20">
         <div className="flex items-start justify-between mb-6">
           <div className="flex-1">
             <div className="flex items-center gap-4 mb-4">
@@ -194,7 +194,7 @@ const ExamDetail: React.FC = () => {
             </div>
             {exam.epreuve ? (
               <div>
-                <p className="text-sm text-textcol/70 mb-3 break-words">{exam.epreuve.nomFichier}</p>
+                <p className="text-sm text-textcol/70 mb-3 wrap-break-word">{exam.epreuve.nomFichier}</p>
                 <button
                   onClick={() => exam.epreuve?.cheminFichier && downloadFile(exam.epreuve.cheminFichier, exam.epreuve.nomFichier || 'epreuve.pdf')}
                   className="w-full px-4 py-2 bg-primary text-white rounded-xl font-google-bold hover:brightness-110 transition-all flex items-center justify-center gap-2"
@@ -222,7 +222,7 @@ const ExamDetail: React.FC = () => {
             </div>
             {exam.corrige ? (
               <div>
-                <p className="text-sm text-textcol/70 mb-3 break-words">{exam.corrige.nomFichier}</p>
+                <p className="text-sm text-textcol/70 mb-3 wrap-break-word">{exam.corrige.nomFichier}</p>
                 <button
                   onClick={() => exam.corrige?.cheminFichier && downloadFile(exam.corrige.cheminFichier, exam.corrige.nomFichier || 'corrige.pdf')}
                   className="w-full px-4 py-2 bg-primary text-white rounded-xl font-google-bold hover:brightness-110 transition-all flex items-center justify-center gap-2"
@@ -239,7 +239,7 @@ const ExamDetail: React.FC = () => {
           </div>
 
           {/* Stats */}
-          <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 rounded-2xl p-6">
+          <div className="bg-linear-to-br from-primary/10 to-primary/5 border border-primary/20 rounded-2xl p-6">
             <h3 className="text-lg font-google-bold text-textcol mb-4">Statistiques</h3>
             <div className="space-y-3">
               <div className="flex items-center justify-between">
