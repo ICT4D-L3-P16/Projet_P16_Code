@@ -7,7 +7,7 @@ interface WorkflowStepProps {
   icon: React.ReactNode;
 }
 
-const WorkflowStep: React.FC<WorkflowStepProps> = ({ number, title, description, icon }) => (
+const WorkflowStep: React.FC<WorkflowStepProps> = ({ title, description, icon }) => (
   <div className="flex gap-6 items-start group">
     <div className="flex-shrink-0 w-12 h-12 bg-primary rounded-xl flex items-center justify-center text-white font-google-bold group-hover:scale-110 transition-transform">
       {icon}

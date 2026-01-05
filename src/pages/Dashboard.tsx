@@ -3,7 +3,7 @@
 // ============================================
 import { Outlet } from 'react-router-dom'
 import { useState } from 'react'
-import { Sidebar } from '../components/Dashboard/SideBar'
+import { Sidebar } from '../components/Dashboard/Sidebar'
 import { ThemeToggle } from '../components/LandingPage/ThemeToggle'
 const Dashboard: React.FC = () => {
     const [isCollapsed, setIsCollapsed] = useState(false)

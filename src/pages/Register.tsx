@@ -6,7 +6,7 @@ import sajeLogo from '../assets/images/logo/logo-white-transparent.png'
 
 const Register: React.FC = () => {
     const navigate = useNavigate()
-    const [showPassword, setShowPassword] = useState(false)
+    const [showPassword] = useState(false)
     const [isLoading, setIsLoading] = useState(false)
     
     const [formData, setFormData] = useState({
