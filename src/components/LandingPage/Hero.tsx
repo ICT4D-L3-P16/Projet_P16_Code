@@ -21,18 +21,18 @@ export const Hero: React.FC<HeroProps> = ({ onStartFreeTrial, onWatchVideo }) =>
               </span>
             </div>
 
-            <h1 className="text-5xl lg:text-6xl xl:text-7xl font-google-bold leading-tight">
-              <span className="text-textcol">Automate</span>
+            <h1 className="text-5xl lg:text-6xl xl:text-5.5xl font-google-bold leading-tight">
+              <span className="text-textcol">Automatiser</span>
               <br />
-              <span className="text-textcol">Evaluation.</span>
+              <span className="text-textcol">Vos Evaluations.</span>
               <br />
-              <span className="text-primary">Empower</span>
+              <span className="text-primary">Renforcer</span>
               <br />
-              <span className="text-primary">Education.</span>
+              <span className="text-primary">L'Education.</span>
             </h1>
 
             <p className="text-lg text-textcol/70 max-w-lg leading-relaxed">
-              The smart grading platform that streamlines the entire exam cycle for teachers and institutions—from creation to correction with 99.9% AI accuracy.
+              La plateforme de notation intelligente qui simplifie l'ensemble du cycle d'examen pour les enseignants et les Institutions, de la création à la correction, avec une précision de 99.9% propulsée par l'IA.
             </p>
 
             {/* CTA Buttons */}
@@ -41,7 +41,7 @@ export const Hero: React.FC<HeroProps> = ({ onStartFreeTrial, onWatchVideo }) =>
                 onClick={onStartFreeTrial}
                 className="bg-primary text-white px-8 py-4 rounded-xl hover:opacity-90 transition-all hover:scale-105 font-google-bold flex items-center gap-2 shadow-lg shadow-primary/20"
               >
-                Start Free Trial
+                Commencer l'essai gratuit
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
@@ -54,7 +54,7 @@ export const Hero: React.FC<HeroProps> = ({ onStartFreeTrial, onWatchVideo }) =>
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M8 5v14l11-7z" />
                 </svg>
-                Watch Video
+                Voir un tutoriel
               </button>
             </div>
 
@@ -69,7 +69,7 @@ export const Hero: React.FC<HeroProps> = ({ onStartFreeTrial, onWatchVideo }) =>
                 ))}
               </div>
               <p className="text-sm text-textcol/60">
-                Trusted by 500+ Institutions
+                +500 Institutions Nous font confiance
               </p>
             </div>
           </div>
@@ -120,8 +120,8 @@ export const Hero: React.FC<HeroProps> = ({ onStartFreeTrial, onWatchVideo }) =>
                     </svg>
                   </div>
                   <div>
-                    <p className="text-xs text-textcol/60">Exam Batch #502 Completed</p>
-                    <p className="text-sm font-google-bold text-textcol">1,247 papers graded in 2m</p>
+                    <p className="text-xs text-textcol/60">Examen #502 terminé</p>
+                    <p className="text-sm font-google-bold text-textcol">1,247 copies corrigées en 2m</p>
                   </div>
                 </div>
               </div>
@@ -130,7 +130,7 @@ export const Hero: React.FC<HeroProps> = ({ onStartFreeTrial, onWatchVideo }) =>
               <div className="absolute bottom-8 left-8 bg-background border border-textcol/10 rounded-xl px-4 py-3 shadow-lg">
                 <div className="text-center">
                   <p className="text-2xl font-google-bold text-primary">99.9%</p>
-                  <p className="text-xs text-textcol/60">Accuracy</p>
+                  <p className="text-xs text-textcol/60">De Précision</p>
                 </div>
               </div>
             </div>

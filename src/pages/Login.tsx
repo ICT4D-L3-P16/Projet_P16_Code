@@ -100,10 +100,10 @@ const Login: React.FC = () => {
                     </div>
 
                     <h1 className="text-5xl text-textcol font-google-bold leading-tight mb-6">
-                        Optimisez la gestion de vos projets avec <span className="text-primary">SAJE</span>
+                        Optimisez la gestion de vos Examens avec <span className="text-primary">SAJE</span>
                     </h1>
                     <p className='text-lg text-textcol opacity-90 max-w-md leading-relaxed'>
-                        La solution tout-en-un pour la gestion de projets et la collaboration d'équipe.
+                        La solution tout-en-un pour la gestion, la correction et la collaboration d'équipe pour vos Examens.
                     </p>
 
                     <div className="mt-12 flex items-center gap-4">
@@ -161,7 +161,7 @@ const Login: React.FC = () => {
                                     errors.email 
                                         ? 'border-red-500 focus:ring-red-500' 
                                         : 'border-gray-200 dark:border-gray-700 focus:ring-primary'
-                                } bg-background text-textcol focus:ring-2 outline-none transition-all placeholder:opacity-50 disabled:opacity-50`}
+                                } bg-surface text-textcol focus:ring-2 outline-none transition-all placeholder:opacity-50 disabled:opacity-50`}
                             />
                             {errors.email && (
                                 <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.email}</p>
@@ -185,7 +185,7 @@ const Login: React.FC = () => {
                                         errors.password 
                                             ? 'border-red-500 focus:ring-red-500' 
                                             : 'border-gray-200 dark:border-gray-700 focus:ring-primary'
-                                    } bg-background text-textcol focus:ring-2 outline-none transition-all placeholder:opacity-50 disabled:opacity-50`}
+                                    } bg-surface text-textcol focus:ring-2 outline-none transition-all placeholder:opacity-50 disabled:opacity-50`}
                                 />
                                 <button 
                                     type="button" 
@@ -234,7 +234,7 @@ const Login: React.FC = () => {
                         <button 
                             type="submit"
                             disabled={isLoading}
-                            className="w-full bg-primary hover:brightness-110 text-white font-google-bold py-4 rounded-xl shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
+                            className="w-full bg-gradient-to-br from-primary to-accent hover:brightness-110 text-background font-google-bold py-4 rounded-xl shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
                         >
                             {isLoading ? (
                                 <>

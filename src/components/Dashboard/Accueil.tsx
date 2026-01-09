@@ -38,6 +38,15 @@ export const Accueil: React.FC = () => {
             </div>
 
             <div className="bg-surface border border-gray-200 dark:border-gray-800 rounded-xl p-6">
+                <h2 className="text-2xl font-google-bold mb-6 text-textcol">Actions Rapides</h2>
+                <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="w-1/2 border-acc"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="bg-surface border border-gray-200 dark:border-gray-800 rounded-xl p-6">
                 <h2 className="text-2xl font-google-bold mb-6 text-textcol">Activités récentes</h2>
                 <div className="space-y-4">
                     {[1, 2, 3].map((i) => (
