@@ -12,169 +12,9 @@ const ExamDetail: React.FC = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  // Correction simulation state
+  // Correction state
   const [grading, setGrading] = useState(false)
   const [gradingProgress, setGradingProgress] = useState(0)
-
-  const handleCorrection = async () => {
-    if (grading) return
-    if (!exam) return
-    if (exam.copies.length === 0) {
-      alert('Aucune copie à corriger')
-      return
-    }
-
-    // If epreuve or corrige is missing, ask user to confirm proceeding
-    if (!exam.epreuve || !exam.corrige) {
-      const missing = [!exam.epreuve ? 'épreuve' : null, !exam.corrige ? 'corrigé' : null].filter(Boolean).join(' et ')
-      const ok = window.confirm(`Aucun ${missing} détecté. Voulez-vous continuer la correction sans ces documents ?`)
-      if (!ok) return
-    }
-
-    setGrading(true)
-    setGradingProgress(5)
-
-    // Build list of remote files (epreuve, corrige, copies)
-    const urls: { url: string; filename?: string }[] = []
-    if (exam.epreuve?.cheminFichier) urls.push({ url: exam.epreuve.cheminFichier, filename: exam.epreuve.nomFichier })
-    if (exam.corrige?.cheminFichier) urls.push({ url: exam.corrige.cheminFichier, filename: exam.corrige.nomFichier })
-    exam.copies.forEach((c) => c.url && urls.push({ url: c.url, filename: c.name }))
-
-    try {
-      // Progress simulation while waiting for server
-      const interval = setInterval(() => setGradingProgress((p) => Math.min(95, p + Math.floor(Math.random() * 8) + 2)), 500)
-
-      // Try to submit remote files to the real API
-      try {
-        const api = await import('../lib/correctionApi')
-        const resp = await api.default.submitRemoteUrls(urls)
-
-        clearInterval(interval)
-        setGradingProgress(100)
-
-        // Map API response to internal format (best-effort)
-        // API example: { resultat: { "copie_1": { note_totale: 14.5, questions: [{ num, point, commentaire }] } } }
-        const data = resp?.resultat || resp
-        const copiesFromApi: any[] = []
-        const apiKeys = Object.keys(data || {})
-        // map in order of exam.copies when possible
-        for (let i = 0; i < apiKeys.length; i++) {
-          const key = apiKeys[i]
-          const entry = data[key]
-          const originalCopy = exam.copies[i]
-          const details = (entry.questions || []).map((q: any) => ({
-            question: q.num,
-            type: q.type || 'auto',
-            reponse: q.reponse || '–',
-            maxPoints: q.maxPoint || q.point || 1,
-            points: q.point || 0,
-            status: (q.point || 0) === 0 ? 'zero' : (q.point || 0) === (q.maxPoint || q.point || 1) ? 'full' : 'partial',
-            comment: q.commentaire || q.comment || ''
-          }))
-          const note = entry.note_totale ?? details.reduce((a: number, b: any) => a + b.points, 0)
-          const maxNote = details.reduce((a: number, b: any) => a + b.maxPoints, 0)
-          const pourcent = Number(((note / (maxNote || 1)) * 100).toFixed(1))
-          copiesFromApi.push({ id: originalCopy?.id || key, nomEleve: originalCopy?.name || key, note, maxNote, pourcent, details })
-        }
-
-        const mockResults = { examId: exam.id, generatedAt: Date.now(), summary: {}, copies: copiesFromApi }
-        const total = mockResults.copies.length
-        const percents = mockResults.copies.map((c: any) => c.pourcent).sort((a: number, b: number) => a - b)
-        const moy = total > 0 ? Number((percents.reduce((a: number, b: number) => a + b, 0) / total).toFixed(2)) : 0
-        const min = percents[0] ?? 0
-        const max = percents[percents.length - 1] ?? 0
-        const median = total > 0 ? percents[Math.floor(total / 2)] : 0
-        const distribution = { excellent: mockResults.copies.filter((c: any) => c.pourcent >= 80).length, pass: mockResults.copies.filter((c: any) => c.pourcent >= 50 && c.pourcent < 80).length, fail: mockResults.copies.filter((c: any) => c.pourcent < 50).length }
-        mockResults.summary = { total, graded: total, moyenne: moy, min, max, median, distribution }
-
-        // persist and navigate
-        try { sessionStorage.setItem(`correction_${exam.id}`, JSON.stringify(mockResults)) } catch (e) { console.warn('sessionStorage unavailable') }
-        setGrading(false)
-        setGradingProgress(0)
-        navigate(`/dashboard/examens/${exam.id}/resultats`, { state: { results: mockResults } })
-        return
-      } catch (err) {
-        console.warn('API submit failed, falling back to mock', err)
-        // fall through to generate local mock
-      }
-    } catch (err) {
-      console.error('Erreur pendant la soumission :', err)
-    }
-
-    // If API failed, fallback to locally-generated mock (previous behaviour)
-    try {
-      // keep previous simulated generator for fallback
-      const mockResults = {
-        examId: exam.id,
-        generatedAt: Date.now(),
-        summary: {},
-        copies: exam.copies.map((c) => {
-          const numQuestions = 5
-          const chooseType = () => {
-            const r = Math.random()
-            if (r < 0.5) return 'mcq'
-            if (r < 0.8) return 'short'
-            return 'essay'
-          }
-          const commentsPool = { full: ['Très bonne réponse', 'Excellent', 'Réponse complète'], partial: ['Réponse partielle, développer un exemple', 'Manque de précision', 'Bonne idée, mais manque de détails'], zero: ['Réponse incorrecte', 'Hors sujet', 'Aucune réponse'] }
-          const questions = Array.from({ length: numQuestions }).map((_, qIdx) => {
-            const type = chooseType()
-            let maxPoints = 1
-            if (type === 'mcq') maxPoints = Math.floor(Math.random() * 2) + 1
-            if (type === 'short') maxPoints = Math.floor(Math.random() * 3) + 2
-            if (type === 'essay') maxPoints = Math.floor(Math.random() * 4) + 3
-            let points = 0
-            let comment = ''
-            if (type === 'mcq') {
-              const correct = Math.random() < 0.6
-              points = correct ? maxPoints : 0
-              comment = correct ? commentsPool.full[Math.floor(Math.random() * commentsPool.full.length)] : commentsPool.zero[Math.floor(Math.random() * commentsPool.zero.length)]
-            } else if (type === 'short') {
-              const p = Math.random()
-              if (p < 0.25) points = 0
-              else if (p < 0.65) points = Math.floor(Math.random() * (maxPoints - 0))
-              else points = maxPoints
-              comment = points === maxPoints ? commentsPool.full[Math.floor(Math.random() * commentsPool.full.length)] : points === 0 ? commentsPool.zero[Math.floor(Math.random() * commentsPool.zero.length)] : commentsPool.partial[Math.floor(Math.random() * commentsPool.partial.length)]
-            } else {
-              const p = Math.random()
-              if (p < 0.15) points = 0
-              else if (p < 0.5) points = Math.floor(Math.random() * Math.max(1, Math.floor(maxPoints / 2)))
-              else if (p < 0.85) points = Math.floor(Math.random() * (maxPoints - 1)) + 1
-              else points = maxPoints
-              comment = points === maxPoints ? 'Très bon développement, arguments et exemples pertinents' : points === 0 ? 'Travail insuffisant, développer vos arguments' : 'Bonne structure, développer davantage certains points'
-            }
-            const status = points === 0 ? 'zero' : points === maxPoints ? 'full' : 'partial'
-            const color = status === 'full' ? 'green' : status === 'partial' ? 'blue' : 'red'
-            return { question: qIdx + 1, type, reponse: type === 'mcq' ? ['A', 'B', 'C', 'D'][Math.floor(Math.random() * 4)] : (Math.random() < 0.5 ? 'Réponse courte' : 'Réponse rédigée'), maxPoints, points, status, color, comment }
-          })
-          const note = questions.reduce((a, b) => a + b.points, 0)
-          const maxNote = questions.reduce((a, b) => a + b.maxPoints, 0)
-          const pourcent = Number(((note / (maxNote || 1)) * 100).toFixed(1))
-          return { id: c.id, nomEleve: c.name, note, maxNote, pourcent, details: questions }
-        })
-      }
-
-      const total = mockResults.copies.length
-      const percents = mockResults.copies.map((c: any) => c.pourcent).sort((a: number, b: number) => a - b)
-      const moy = total > 0 ? Number((percents.reduce((a: number, b: number) => a + b, 0) / total).toFixed(2)) : 0
-      const min = percents[0] ?? 0
-      const max = percents[percents.length - 1] ?? 0
-      const median = total > 0 ? percents[Math.floor(total / 2)] : 0
-      const distribution = { excellent: mockResults.copies.filter((c: any) => c.pourcent >= 80).length, pass: mockResults.copies.filter((c: any) => c.pourcent >= 50 && c.pourcent < 80).length, fail: mockResults.copies.filter((c: any) => c.pourcent < 50).length }
-      mockResults.summary = { total, graded: total, moyenne: moy, min, max, median, distribution }
-
-      try { sessionStorage.setItem(`correction_${exam.id}`, JSON.stringify(mockResults)) } catch (e) { console.warn('sessionStorage unavailable') }
-      setGrading(false)
-      setGradingProgress(0)
-      navigate(`/dashboard/examens/${exam.id}/resultats`, { state: { results: mockResults } })
-
-    } catch (err) {
-      console.error('Erreur pendant la création du mock fallback', err)
-      setGrading(false)
-      setGradingProgress(0)
-      alert('Erreur pendant la correction (API et fallback ont échoué)')
-    }
-  }
 
   const exam = exams.find((e) => e.id === id)
 
@@ -183,6 +23,268 @@ const ExamDetail: React.FC = () => {
       navigate('/dashboard/examens')
     }
   }, [exam, isLoading, navigate])
+
+ const handleCorrection = async () => {
+  if (grading) return
+  if (!exam) return
+  if (exam.copies.length === 0) {
+    alert('Aucune copie à corriger')
+    return
+  }
+
+  // If epreuve or corrige is missing, ask user to confirm proceeding
+  if (!exam.epreuve || !exam.corrige) {
+    const missing = [!exam.epreuve ? 'épreuve' : null, !exam.corrige ? 'corrigé' : null].filter(Boolean).join(' et ')
+    const ok = window.confirm(`Aucun ${missing} détecté. Voulez-vous continuer la correction sans ces documents ?`)
+    if (!ok) return
+  }
+
+  setGrading(true)
+  setGradingProgress(5)
+
+  // Récupérer l'URL du backend depuis les variables d'environnement
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'
+
+  try {
+    // Progress simulation
+    const progressInterval = setInterval(() => {
+      setGradingProgress((p) => Math.min(90, p + Math.floor(Math.random() * 8) + 2))
+    }, 500)
+
+    // Préparer les fichiers des copies pour l'upload
+    const copyFiles: File[] = []
+    
+    // Récupérer les fichiers des copies depuis les URLs
+    for (const copie of exam.copies) {
+      if (copie.url) {
+        try {
+          const response = await fetch(copie.url)
+          const blob = await response.blob()
+          const file = new File([blob], copie.name, { type: blob.type })
+          copyFiles.push(file)
+        } catch (error) {
+          console.warn(`Impossible de récupérer le fichier: ${copie.name}`, error)
+        }
+      }
+    }
+
+    if (copyFiles.length === 0) {
+      throw new Error('Aucun fichier de copie disponible')
+    }
+
+    // Étape 1: OCR des copies
+    setGradingProgress(30)
+    const formData = new FormData()
+    copyFiles.forEach((file) => {
+      formData.append('files', file)
+    })
+
+    const ocrResponse = await fetch(`${API_BASE_URL}/api/ocr`, {
+      method: 'POST',
+      body: formData
+    })
+
+    if (!ocrResponse.ok) {
+      throw new Error('Erreur lors de l\'OCR')
+    }
+
+    const ocrData = await ocrResponse.json()
+    setGradingProgress(60)
+
+    // Étape 2: Correction via LLM
+    const correctResponse = await fetch(`${API_BASE_URL}/api/correct`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        evalData: ocrData.eval
+      })
+    })
+
+    if (!correctResponse.ok) {
+      throw new Error('Erreur lors de la correction')
+    }
+
+    const correctionData = await correctResponse.json()
+    clearInterval(progressInterval)
+    setGradingProgress(100)
+
+    // Transformer les résultats de l'API au format interne
+    const resultat = correctionData.resultat || correctionData
+    const copiesFromApi: any[] = []
+    
+    Object.keys(resultat).forEach((key, index) => {
+      const entry = resultat[key]
+      const originalCopy = exam.copies[index] || exam.copies.find(c => c.name.includes(key))
+      
+      const details = (entry.questions || []).map((q: any) => ({
+        question: q.num || q.question,
+        type: q.type || 'auto',
+        reponse: q.reponse || '–',
+        maxPoints: q.maxPoint || q.point || 1,
+        points: q.point || 0,
+        status: (q.point || 0) === 0 ? 'zero' : (q.point || 0) === (q.maxPoint || q.point || 1) ? 'full' : 'partial',
+        comment: q.commentaire || q.comment || ''
+      }))
+
+      const note = entry.note_totale ?? details.reduce((a: number, b: any) => a + b.points, 0)
+      const maxNote = details.reduce((a: number, b: any) => a + b.maxPoints, 0) || 20
+      const pourcent = Number(((note / maxNote) * 100).toFixed(1))
+
+      copiesFromApi.push({
+        id: originalCopy?.id || key,
+        nomEleve: originalCopy?.name || key,
+        note,
+        maxNote,
+        pourcent,
+        details
+      })
+    })
+
+    // Calculer les statistiques
+    const total = copiesFromApi.length
+    const percents = copiesFromApi.map((c: any) => c.pourcent).sort((a: number, b: number) => a - b)
+    const moy = total > 0 ? Number((percents.reduce((a: number, b: number) => a + b, 0) / total).toFixed(2)) : 0
+    const min = percents[0] ?? 0
+    const max = percents[percents.length - 1] ?? 0
+    const median = total > 0 ? percents[Math.floor(total / 2)] : 0
+    const distribution = {
+      excellent: copiesFromApi.filter((c: any) => c.pourcent >= 80).length,
+      pass: copiesFromApi.filter((c: any) => c.pourcent >= 50 && c.pourcent < 80).length,
+      fail: copiesFromApi.filter((c: any) => c.pourcent < 50).length
+    }
+
+    const finalResults = {
+      examId: exam.id,
+      generatedAt: Date.now(),
+      summary: {
+        total,
+        graded: total,
+        moyenne: moy,
+        min,
+        max,
+        median,
+        distribution
+      },
+      copies: copiesFromApi
+    }
+
+    // Sauvegarder dans sessionStorage
+    try {
+      sessionStorage.setItem(`correction_${exam.id}`, JSON.stringify(finalResults))
+    } catch (e) {
+      console.warn('sessionStorage unavailable')
+    }
+
+    setGrading(false)
+    setGradingProgress(0)
+    navigate(`/dashboard/examens/${exam.id}/resultats`, { state: { results: finalResults } })
+
+  } catch (error) {
+    console.error('Erreur pendant la correction:', error)
+    setGrading(false)
+    setGradingProgress(0)
+    
+    // Fallback vers données mockées en cas d'erreur
+    const useMock = window.confirm(
+      'La correction via l\'API a échoué. Voulez-vous utiliser des données de démonstration à la place ?'
+    )
+    
+    if (useMock) {
+      generateMockResults()
+    } else {
+      alert('Erreur lors de la correction. Veuillez réessayer.')
+    }
+  }
+}
+
+  const generateMockResults = () => {
+    if (!exam) return
+
+    setGrading(true)
+    setGradingProgress(50)
+
+    const mockResults = {
+      examId: exam.id,
+      generatedAt: Date.now(),
+      summary: {},
+      copies: exam.copies.map((c) => {
+        const numQuestions = 5
+        const chooseType = () => {
+          const r = Math.random()
+          if (r < 0.5) return 'mcq'
+          if (r < 0.8) return 'short'
+          return 'essay'
+        }
+        const commentsPool = {
+          full: ['Très bonne réponse', 'Excellent', 'Réponse complète'],
+          partial: ['Réponse partielle, développer un exemple', 'Manque de précision', 'Bonne idée, mais manque de détails'],
+          zero: ['Réponse incorrecte', 'Hors sujet', 'Aucune réponse']
+        }
+        const questions = Array.from({ length: numQuestions }).map((_, qIdx) => {
+          const type = chooseType()
+          let maxPoints = 1
+          if (type === 'mcq') maxPoints = Math.floor(Math.random() * 2) + 1
+          if (type === 'short') maxPoints = Math.floor(Math.random() * 3) + 2
+          if (type === 'essay') maxPoints = Math.floor(Math.random() * 4) + 3
+          let points = 0
+          let comment = ''
+          if (type === 'mcq') {
+            const correct = Math.random() < 0.6
+            points = correct ? maxPoints : 0
+            comment = correct ? commentsPool.full[Math.floor(Math.random() * commentsPool.full.length)] : commentsPool.zero[Math.floor(Math.random() * commentsPool.zero.length)]
+          } else if (type === 'short') {
+            const p = Math.random()
+            if (p < 0.25) points = 0
+            else if (p < 0.65) points = Math.floor(Math.random() * (maxPoints - 0))
+            else points = maxPoints
+            comment = points === maxPoints ? commentsPool.full[Math.floor(Math.random() * commentsPool.full.length)] : points === 0 ? commentsPool.zero[Math.floor(Math.random() * commentsPool.zero.length)] : commentsPool.partial[Math.floor(Math.random() * commentsPool.partial.length)]
+          } else {
+            const p = Math.random()
+            if (p < 0.15) points = 0
+            else if (p < 0.5) points = Math.floor(Math.random() * Math.max(1, Math.floor(maxPoints / 2)))
+            else if (p < 0.85) points = Math.floor(Math.random() * (maxPoints - 1)) + 1
+            else points = maxPoints
+            comment = points === maxPoints ? 'Très bon développement, arguments et exemples pertinents' : points === 0 ? 'Travail insuffisant, développer vos arguments' : 'Bonne structure, développer davantage certains points'
+          }
+          const status = points === 0 ? 'zero' : points === maxPoints ? 'full' : 'partial'
+          return { question: qIdx + 1, type, reponse: type === 'mcq' ? ['A', 'B', 'C', 'D'][Math.floor(Math.random() * 4)] : (Math.random() < 0.5 ? 'Réponse courte' : 'Réponse rédigée'), maxPoints, points, status, comment }
+        })
+        const note = questions.reduce((a, b) => a + b.points, 0)
+        const maxNote = questions.reduce((a, b) => a + b.maxPoints, 0)
+        const pourcent = Number(((note / (maxNote || 1)) * 100).toFixed(1))
+        return { id: c.id, nomEleve: c.name, note, maxNote, pourcent, details: questions }
+      })
+    }
+
+    const total = mockResults.copies.length
+    const percents = mockResults.copies.map((c: any) => c.pourcent).sort((a: number, b: number) => a - b)
+    const moy = total > 0 ? Number((percents.reduce((a: number, b: number) => a + b, 0) / total).toFixed(2)) : 0
+    const min = percents[0] ?? 0
+    const max = percents[percents.length - 1] ?? 0
+    const median = total > 0 ? percents[Math.floor(total / 2)] : 0
+    const distribution = {
+      excellent: mockResults.copies.filter((c: any) => c.pourcent >= 80).length,
+      pass: mockResults.copies.filter((c: any) => c.pourcent >= 50 && c.pourcent < 80).length,
+      fail: mockResults.copies.filter((c: any) => c.pourcent < 50).length
+    }
+    mockResults.summary = { total, graded: total, moyenne: moy, min, max, median, distribution }
+
+    setGradingProgress(100)
+
+    try {
+      sessionStorage.setItem(`correction_${exam.id}`, JSON.stringify(mockResults))
+    } catch (e) {
+      console.warn('sessionStorage unavailable')
+    }
+
+    setTimeout(() => {
+      setGrading(false)
+      setGradingProgress(0)
+      navigate(`/dashboard/examens/${exam.id}/resultats`, { state: { results: mockResults } })
+    }, 500)
+  }
 
   if (isLoading) {
     return (
@@ -435,11 +537,11 @@ const ExamDetail: React.FC = () => {
                   'Corriger les copies'
                 )}
               </button>
-              <p className="text-sm text-textcol/60 mt-2">Le bouton lancera une correction (API ou simulation). Si aucune épreuve ou corrigé n'est présent, vous serez invité à confirmer.</p>
+              <p className="text-sm text-textcol/60 mt-2">La correction utilise l'API d'OCR et de correction automatique par IA.</p>
 
-              {( !exam.epreuve || !exam.corrige ) && (
+              {(!exam.epreuve || !exam.corrige) && (
                 <div className="mt-3 text-sm text-yellow-700 bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-md">
-                  <strong>Attention:</strong> { !exam.epreuve ? 'Aucune épreuve' : '' } { !exam.corrige ? 'Aucun corrigé' : '' } détecté(s). La correction sera effectuée sans document de référence.
+                  <strong>Attention:</strong> {!exam.epreuve ? 'Aucune épreuve' : ''} {!exam.corrige ? 'Aucun corrigé' : ''} détecté(s). La correction sera effectuée sans document de référence.
                 </div>
               )}
             </div>
@@ -598,13 +700,18 @@ const ExamDetail: React.FC = () => {
           <div className="bg-surface rounded-2xl p-8 max-w-md w-full shadow-2xl">
             <div className="flex items-center gap-4 mb-4">
               <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-indigo-600 dark:text-indigo-400">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3" />
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-indigo-600 dark:text-indigo-400 animate-spin">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
                 </svg>
               </div>
               <div>
-                <h3 className="text-lg font-google-bold text-textcol">Traitement des copies</h3>
-                <p className="text-sm text-textcol/70 mt-1">La correction est en cours. Ceci est une simulation.</p>
+                <h3 className="text-lg font-google-bold text-textcol">Correction en cours</h3>
+                <p className="text-sm text-textcol/70 mt-1">
+                  {gradingProgress < 30 ? 'Préparation des fichiers...' : 
+                   gradingProgress < 60 ? 'Extraction du texte (OCR)...' : 
+                   gradingProgress < 90 ? 'Correction par IA...' : 
+                   'Finalisation...'}
+                </p>
               </div>
             </div>
 
