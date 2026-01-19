@@ -12,18 +12,21 @@
 }
 
 @theme{
-  --color-textcol: #333333;
-  --color-background: #F6F6F8;
-  --color-primary: #00BFFF;
-  --color-secondary: #9333ea;
+  /* Professional Corporate Palette */
+  --color-textcol: #1A1A1E;
+  --color-background: #F8FAFC;
+  --color-primary: #2563EB;
+  --color-secondary: #64748B;
   --color-surface: #FFFFFF;
-  --color-accent: #F1317E;
+  --color-accent: #0F172A;
+  --color-border-subtle: #E2E8F0;
   
-  --color-textcol-dark: #f3f4f6;
-  --color-background-dark: #101622;
-  --color-primary-dark: #00BFFF;
-  --color-secondary-dark: #a78bfa;
-  --color-surface-dark: #111827;
+  --color-textcol-dark: #F1F5F9;
+  --color-background-dark: #0F172A;
+  --color-primary-dark: #3B82F6;
+  --color-secondary-dark: #94A3B8;
+  --color-surface-dark: #1E293B;
+  --color-border-subtle-dark: #334155;
 
   --font-google: 'GoogleSansRegular', "sans-serif";
   --font-google-bold: 'GoogleSansBold', "sans-serif";
@@ -31,13 +34,11 @@
 
 :root{
   font-family: GoogleSansRegular;
-}
-
-/* Light / dark theme variables applied to the document element */
-:root {
-  --color-textcol: #333333;
-  --color-background: #ffffff;
-  --color-primary: #0074FF;
+  --color-textcol: #1A1A1E;
+  --color-background: #F8FAFC;
+  --color-primary: #2563EB;
+  --color-surface: #FFFFFF;
+  --color-border-subtle: #E2E8F0;
 }
 
 html[data-theme='dark'] {
@@ -45,6 +46,7 @@ html[data-theme='dark'] {
   --color-background: var(--color-background-dark);
   --color-primary: var(--color-primary-dark);
   --color-surface: var(--color-surface-dark);
+  --color-border-subtle: var(--color-border-subtle-dark);
 }
 
 
@@ -52,4 +54,25 @@ body {
   background: var(--color-background);
   color: var(--color-textcol);
   font-family: var(--font-google);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Utilities */
+.glass-effect {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+html[data-theme='dark'] .glass-effect {
+  background: rgba(30, 41, 59, 0.7);
+}
+
+.sidebar-shadow {
+  box-shadow: 4px 0 24px -12px rgba(0, 0, 0, 0.05);
+}
+
+.card-shadow {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
 }

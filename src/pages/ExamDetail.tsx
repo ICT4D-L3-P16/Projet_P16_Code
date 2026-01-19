@@ -1,6 +1,24 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useExams } from '../exams'
+import { 
+  ChevronLeft, 
+  Trash2, 
+  BookOpen, 
+  GraduationCap, 
+  Calendar, 
+  Download, 
+  Play, 
+  AlertTriangle,
+  UploadCloud,
+  FileText,
+  Clock,
+  LayoutDashboard,
+  CheckCircle2,
+  X,
+  Loader2,
+  FileCheck
+} from 'lucide-react'
 
 const ExamDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>()
@@ -385,182 +403,177 @@ const ExamDetail: React.FC = () => {
   }
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto">
+    <div className="space-y-10">
       {/* Header Section */}
-      <div className="bg-linear-to-br from-primary/10 via-primary/5 to-transparent rounded-2xl p-8 border border-primary/20">
-        <div className="flex items-start justify-between mb-6">
-          <div className="flex-1">
-            <div className="flex items-center gap-4 mb-4">
-              <Link
-                to="/dashboard/examens"
-                className="text-textcol/70 hover:text-primary transition-colors flex items-center gap-2 group"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 group-hover:-translate-x-1 transition-transform">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-                </svg>
-                Retour aux examens
-              </Link>
-            </div>
-            <h1 className="text-4xl font-google-bold text-textcol mb-3">{exam.titre}</h1>
-            <div className="flex items-center gap-4 text-textcol/70">
-              <span className="flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-                </svg>
-                {exam.matiere}
-              </span>
-              {exam.classe && (
+      <section className="bg-surface border border-border-subtle rounded-3xl p-8 card-shadow shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 mb-8">
+          <div className="space-y-4">
+            <Link
+              to="/dashboard/examens"
+              className="inline-flex items-center gap-2 text-sm font-google-bold text-secondary hover:text-primary transition-colors group"
+            >
+              <ChevronLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
+              Retour aux examens
+            </Link>
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-3xl font-google-bold text-textcol">{exam.titre}</h1>
+                {getStatutBadge()}
+              </div>
+              <div className="flex flex-wrap items-center gap-6 text-sm text-secondary font-medium">
                 <span className="flex items-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
-                  </svg>
-                  {exam.classe}
+                  <BookOpen size={16} className="text-primary" />
+                  {exam.matiere}
                 </span>
-              )}
-              <span className="flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-                </svg>
-                {new Date(exam.dateExamen).toLocaleDateString('fr-FR', {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                })}
-              </span>
+                {exam.classe && (
+                  <span className="flex items-center gap-2">
+                    <GraduationCap size={16} className="text-primary" />
+                    {exam.classe}
+                  </span>
+                )}
+                <span className="flex items-center gap-2">
+                  <Calendar size={16} className="text-primary" />
+                  {new Date(exam.dateExamen).toLocaleDateString('fr-FR', {
+                    day: 'numeric', month: 'long', year: 'numeric'
+                  })}
+                </span>
+              </div>
             </div>
           </div>
+
           <div className="flex items-center gap-3">
-            {getStatutBadge()}
             <button
               onClick={() => setShowDeleteModal(true)}
-              className="px-4 py-2 bg-red-500/10 text-red-600 dark:text-red-400 rounded-xl font-google-bold hover:bg-red-500/20 transition-all flex items-center gap-2"
+              className="flex items-center gap-2 px-4 py-2 text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/10 dark:hover:bg-red-900/20 rounded-xl text-sm font-google-bold transition-all"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-              </svg>
+              <Trash2 size={16} />
               Supprimer
             </button>
           </div>
         </div>
-      </div>
+      </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column - Files Section */}
         <div className="lg:col-span-1 space-y-6">
           {/* Épreuve */}
-          <div className="bg-surface border border-gray-200 dark:border-gray-800 rounded-2xl p-6 hover:shadow-lg transition-all">
+          <div className="bg-surface border border-border-subtle rounded-3xl p-6 card-shadow shadow-sm hover:shadow-md transition-all">
             <div className="flex items-center gap-3 mb-4">
-              <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-blue-600 dark:text-blue-400">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-                </svg>
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/10 rounded-xl">
+                <FileText className="text-blue-600" size={20} />
               </div>
               <h3 className="text-lg font-google-bold text-textcol">Épreuve</h3>
             </div>
             {exam.epreuve ? (
-              <div>
-                <p className="text-sm text-textcol/70 mb-3 wrap-break-word">{exam.epreuve.nomFichier}</p>
+              <div className="space-y-4">
+                <div className="flex items-start gap-2 p-3 bg-background rounded-xl border border-border-subtle">
+                  <FileText className="text-secondary shrink-0 mt-0.5" size={14} />
+                  <p className="text-xs text-secondary font-medium truncate">{exam.epreuve.nomFichier}</p>
+                </div>
                 <button
                   onClick={() => exam.epreuve?.cheminFichier && downloadFile(exam.epreuve.cheminFichier, exam.epreuve.nomFichier || 'epreuve.pdf')}
-                  className="w-full px-4 py-2 bg-primary text-white rounded-xl font-google-bold hover:brightness-110 transition-all flex items-center justify-center gap-2"
+                  className="w-full px-4 py-2.5 bg-primary text-white rounded-xl font-google-bold text-sm hover:brightness-110 transition-all flex items-center justify-center gap-2"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                  </svg>
+                  <Download size={16} />
                   Télécharger
                 </button>
               </div>
             ) : (
-              <p className="text-sm text-textcol/50">Aucune épreuve téléchargée</p>
+              <div className="p-8 text-center bg-background rounded-2xl border border-dashed border-border-subtle">
+                <p className="text-xs text-secondary font-medium">Aucune épreuve</p>
+              </div>
             )}
           </div>
 
           {/* Corrigé */}
-          <div className="bg-surface border border-gray-200 dark:border-gray-800 rounded-2xl p-6 hover:shadow-lg transition-all">
+          <div className="bg-surface border border-border-subtle rounded-3xl p-6 card-shadow shadow-sm hover:shadow-md transition-all">
             <div className="flex items-center gap-3 mb-4">
-              <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-xl">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-green-600 dark:text-green-400">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+              <div className="p-3 bg-green-50 dark:bg-green-900/10 rounded-xl">
+                <CheckCircle2 className="text-green-600" size={20} />
               </div>
               <h3 className="text-lg font-google-bold text-textcol">Corrigé</h3>
             </div>
             {exam.corrige ? (
-              <div>
-                <p className="text-sm text-textcol/70 mb-3 wrap-break-word">{exam.corrige.nomFichier}</p>
+              <div className="space-y-4">
+                <div className="flex items-start gap-2 p-3 bg-background rounded-xl border border-border-subtle">
+                  <FileCheck className="text-secondary shrink-0 mt-0.5" size={14} />
+                  <p className="text-xs text-secondary font-medium truncate">{exam.corrige.nomFichier}</p>
+                </div>
                 <button
                   onClick={() => exam.corrige?.cheminFichier && downloadFile(exam.corrige.cheminFichier, exam.corrige.nomFichier || 'corrige.pdf')}
-                  className="w-full px-4 py-2 bg-primary text-white rounded-xl font-google-bold hover:brightness-110 transition-all flex items-center justify-center gap-2"
+                  className="w-full px-4 py-2.5 bg-primary text-white rounded-xl font-google-bold text-sm hover:brightness-110 transition-all flex items-center justify-center gap-2"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                  </svg>
+                  <Download size={16} />
                   Télécharger
                 </button>
               </div>
             ) : (
-              <p className="text-sm text-textcol/50">Aucun corrigé téléchargé</p>
+              <div className="p-8 text-center bg-background rounded-2xl border border-dashed border-border-subtle">
+                <p className="text-xs text-secondary font-medium">Aucun corrigé</p>
+              </div>
             )}
           </div>
 
-          {/* Stats */}
-          <div className="bg-linear-to-br from-primary/10 to-primary/5 border border-primary/20 rounded-2xl p-6">
-            <h3 className="text-lg font-google-bold text-textcol mb-4">Statistiques</h3>
-            <div className="space-y-3">
+          {/* Action Card */}
+          <div className="bg-indigo-600 rounded-3xl p-6 shadow-xl shadow-indigo-600/20 text-white relative overflow-hidden group">
+            <div className="relative z-10 space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-textcol/70">Copies importées</span>
-                <span className="text-2xl font-google-bold text-primary">{exam.copies.length}</span>
+                <h3 className="text-lg font-google-bold">Analyse & IA</h3>
+                <Play size={20} className="text-white/40" />
               </div>
-              {exam.epreuve && (
-                <div className="flex items-center justify-between">
-                  <span className="text-textcol/70">Durée</span>
-                  <span className="text-lg font-google-bold text-textcol">{exam.epreuve.dureeMinutes} min</span>
+              <div className="space-y-2 pb-2">
+                <div className="flex justify-between text-sm text-indigo-100">
+                  <span>Copies importées</span>
+                  <span className="font-google-bold">{exam.copies.length}</span>
                 </div>
-              )}
-            </div>
-
-            {/* Corriger Button */}
-            <div className="mt-6">
+                {exam.epreuve && (
+                  <div className="flex justify-between text-sm text-indigo-100">
+                    <span>Durée prévue</span>
+                    <span className="font-google-bold">{exam.epreuve.dureeMinutes} min</span>
+                  </div>
+                )}
+              </div>
               <button
                 onClick={handleCorrection}
-                id="btn-corriger"
-                className="w-full px-6 py-3 bg-indigo-600 text-white rounded-xl font-google-bold hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full py-3 bg-white text-indigo-600 rounded-xl font-google-bold text-sm hover:bg-indigo-50 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                 disabled={grading || exam.copies.length === 0}
               >
                 {grading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Correction en cours...
-                  </>
+                  <Loader2 className="animate-spin" size={18} />
                 ) : (
-                  'Corriger les copies'
+                  <>
+                    <Play size={16} fill="currentColor" />
+                    Lancer la correction
+                  </>
                 )}
               </button>
-              <p className="text-sm text-textcol/60 mt-2">La correction utilise l'API d'OCR et de correction automatique par IA.</p>
-
               {(!exam.epreuve || !exam.corrige) && (
-                <div className="mt-3 text-sm text-yellow-700 bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-md">
-                  <strong>Attention:</strong> {!exam.epreuve ? 'Aucune épreuve' : ''} {!exam.corrige ? 'Aucun corrigé' : ''} détecté(s). La correction sera effectuée sans document de référence.
+                <div className="flex items-start gap-2 p-2 bg-white/10 rounded-lg">
+                  <AlertTriangle className="text-yellow-300 shrink-0" size={14} />
+                  <p className="text-[10px] text-white/80 leading-tight">Documents de référence manquants. La correction peut être moins précise.</p>
                 </div>
               )}
             </div>
+            <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
           </div>
         </div>
 
         {/* Right Column - Upload & Copies */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-8">
           {/* Upload Section */}
-          <div className="bg-surface border border-gray-200 dark:border-gray-800 rounded-2xl p-8">
-            <h2 className="text-2xl font-google-bold text-textcol mb-6 flex items-center gap-3">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-7 h-7 text-primary">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-              </svg>
-              Importer des copies d'étudiants
-            </h2>
+          <section className="bg-surface border border-border-subtle rounded-3xl p-8 card-shadow shadow-sm transition-all">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 bg-primary/10 rounded-xl">
+                <UploadCloud className="text-primary" size={24} />
+              </div>
+              <div>
+                <h2 className="text-xl font-google-bold text-textcol">Importer des copies</h2>
+                <p className="text-sm text-secondary">Formats acceptés : PDF, PNG, JPG</p>
+              </div>
+            </div>
             
-            <form onSubmit={handleUpload} className="space-y-4">
-              <div className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-8 text-center hover:border-primary/50 transition-colors">
+            <form onSubmit={handleUpload} className="space-y-6">
+              <div className="group relative border-2 border-dashed border-border-subtle rounded-2xl p-10 text-center hover:border-primary/50 transition-all hover:bg-primary/[0.02]">
                 <input
                   type="file"
                   id="student-files"
@@ -569,43 +582,48 @@ const ExamDetail: React.FC = () => {
                   onChange={(e) => setFiles(e.target.files)}
                   className="hidden"
                 />
-                <label htmlFor="student-files" className="cursor-pointer block">
-                  <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-primary">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
-                    </svg>
+                <label htmlFor="student-files" className="cursor-pointer block space-y-4">
+                  <div className="mx-auto w-16 h-16 bg-background rounded-2xl flex items-center justify-center card-shadow group-hover:scale-110 transition-transform">
+                    <FileText className="text-primary" size={32} />
                   </div>
-                  <p className="text-textcol font-google-bold mb-1">
-                    Cliquez pour sélectionner des fichiers
-                  </p>
-                  <p className="text-sm text-textcol/50">
-                    PDF ou images • Plusieurs fichiers acceptés
-                  </p>
+                  <div>
+                    <p className="text-textcol font-google-bold">
+                      {files && files.length > 0 ? `${files.length} fichiers sélectionnés` : 'Glissez-déposez vos fichiers ici'}
+                    </p>
+                    <p className="text-sm text-secondary mt-1">
+                      ou cliquez pour parcourir vos dossiers
+                    </p>
+                  </div>
                 </label>
               </div>
 
               {files && files.length > 0 && (
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
-                  <p className="text-sm font-google-bold text-blue-900 dark:text-blue-100 mb-2">
-                    {files.length} fichier(s) sélectionné(s)
-                  </p>
-                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                <div className="bg-background border border-border-subtle rounded-2xl p-4 animate-in fade-in slide-in-from-top-2">
+                  <div className="flex items-center gap-2 text-sm font-google-bold text-textcol mb-3">
+                    <CheckCircle2 size={16} className="text-green-500" />
+                    Fichiers prêts pour l'import
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
                     {Array.from(files).map((file, idx) => (
-                      <p key={idx} className="text-xs text-blue-700 dark:text-blue-300 truncate">
-                        • {file.name}
-                      </p>
+                      <div key={idx} className="flex items-center gap-2 p-2 bg-surface border border-border-subtle rounded-lg text-[11px] font-medium text-secondary truncate">
+                        <FileText size={12} className="shrink-0" />
+                        {file.name}
+                      </div>
                     ))}
                   </div>
                 </div>
               )}
 
               {uploading && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-textcol/70">Import en cours...</span>
-                    <span className="font-google-bold text-primary">{Math.round(uploadProgress)}%</span>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-xs font-google-bold">
+                    <span className="text-secondary flex items-center gap-2">
+                      <Loader2 className="animate-spin text-primary" size={14} />
+                      Importation en cours...
+                    </span>
+                    <span className="text-primary">{Math.round(uploadProgress)}%</span>
                   </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                  <div className="w-full bg-background rounded-full h-1.5 overflow-hidden border border-border-subtle">
                     <div
                       className="bg-primary h-full transition-all duration-300 rounded-full"
                       style={{ width: `${uploadProgress}%` }}
@@ -617,115 +635,123 @@ const ExamDetail: React.FC = () => {
               <button
                 type="submit"
                 disabled={!files || files.length === 0 || uploading}
-                className="w-full px-6 py-4 bg-primary text-white rounded-xl font-google-bold hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full px-6 py-3.5 bg-primary text-white rounded-xl font-google-bold hover:brightness-110 transition-all disabled:opacity-50 disabled:grayscale flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
               >
                 {uploading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                    Import en cours...
-                  </>
+                  <Loader2 className="animate-spin" size={20} />
                 ) : (
                   <>
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                    </svg>
-                    Importer les copies
+                    <UploadCloud size={20} />
+                    Démarrer l'importation
                   </>
                 )}
               </button>
             </form>
-          </div>
+          </section>
 
           {/* Copies List */}
-          <div className="bg-surface border border-gray-200 dark:border-gray-800 rounded-2xl p-8">
-            <h2 className="text-2xl font-google-bold text-textcol mb-6 flex items-center gap-3">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-7 h-7 text-primary">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-              </svg>
-              Copies importées ({exam.copies.length})
-            </h2>
+          <section className="bg-surface border border-border-subtle rounded-3xl p-8 card-shadow shadow-sm">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-secondary/10 rounded-xl">
+                  <LayoutDashboard className="text-secondary" size={24} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-google-bold text-textcol">Copies importées</h2>
+                  <p className="text-sm text-secondary">{exam.copies.length} document{exam.copies.length > 1 ? 's' : ''} au total</p>
+                </div>
+              </div>
+            </div>
 
             {exam.copies.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="mx-auto w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-10 h-10 text-gray-400">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-                  </svg>
+              <div className="text-center py-16 bg-background rounded-3xl border border-dashed border-border-subtle">
+                <div className="mx-auto w-16 h-16 bg-surface rounded-2xl flex items-center justify-center mb-4 card-shadow">
+                  <FileText className="text-border-subtle" size={32} />
                 </div>
-                <p className="text-textcol/70 font-google-bold mb-2">Aucune copie importée</p>
-                <p className="text-sm text-textcol/50">
-                  Importez les copies des étudiants pour commencer la correction
-                </p>
+                <p className="text-textcol font-google-bold">Liste vide</p>
+                <p className="text-sm text-secondary mt-1">Aucune copie n'a été importée pour cet examen.</p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="grid grid-cols-1 gap-3">
                 {exam.copies.map((copie) => (
                   <div
                     key={copie.id}
-                    className="flex items-center justify-between p-4 bg-background rounded-xl border border-gray-200 dark:border-gray-800 hover:shadow-md transition-all group"
+                    className="group flex items-center justify-between p-4 bg-background border border-border-subtle rounded-2xl hover:border-primary/30 hover:shadow-md transition-all"
                   >
-                    <div className="flex items-center gap-4 flex-1 min-w-0">
-                      <div className="p-2 bg-primary/10 rounded-lg">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-primary">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-                        </svg>
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className="p-2.5 bg-surface rounded-xl border border-border-subtle group-hover:bg-primary/5 group-hover:border-primary/20 transition-colors">
+                        <FileText className="text-secondary group-hover:text-primary transition-colors" size={18} />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-google-bold text-textcol truncate">{copie.name}</p>
-                        <p className="text-sm text-textcol/50">
-                          {new Date(copie.uploadedAt).toLocaleString('fr-FR')}
-                        </p>
+                      <div className="min-w-0">
+                        <p className="font-google-bold text-textcol truncate text-sm">{copie.name}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <Clock size={12} className="text-secondary/50" />
+                          <p className="text-[11px] font-medium text-secondary/60">
+                            {new Date(copie.uploadedAt).toLocaleString('fr-FR', {
+                              day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+                            })}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                    <button
-                      onClick={() => copie.url && downloadFile(copie.url, copie.name)}
-                      className="px-4 py-2 bg-primary text-white rounded-lg font-google-bold hover:brightness-110 transition-all opacity-0 group-hover:opacity-100 flex items-center gap-2"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                      </svg>
-                      Télécharger
-                    </button>
+                    <div className="flex items-center gap-2 transform translate-x-2 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all">
+                      <button
+                        onClick={() => copie.url && downloadFile(copie.url, copie.name)}
+                        className="p-2 text-secondary hover:text-primary hover:bg-primary/5 rounded-lg transition-all"
+                        title="Télécharger"
+                      >
+                        <Download size={18} />
+                      </button>
+                      <button className="p-2 text-secondary hover:text-red-600 hover:bg-red-50 rounded-lg transition-all">
+                        <X size={18} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
-          </div>
+          </section>
         </div>
       </div>
 
       {/* Grading Modal */}
       {grading && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-surface rounded-2xl p-8 max-w-md w-full shadow-2xl">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-indigo-600 dark:text-indigo-400 animate-spin">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-lg font-google-bold text-textcol">Correction en cours</h3>
-                <p className="text-sm text-textcol/70 mt-1">
-                  {gradingProgress < 30 ? 'Préparation des fichiers...' : 
-                   gradingProgress < 60 ? 'Extraction du texte (OCR)...' : 
-                   gradingProgress < 90 ? 'Correction par IA...' : 
-                   'Finalisation...'}
-                </p>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-6 animate-in fade-in duration-300">
+          <div className="bg-surface rounded-[2rem] p-10 max-w-md w-full shadow-2xl border border-border-subtle text-center space-y-8">
+            <div className="relative mx-auto w-24 h-24">
+              <div className="absolute inset-0 bg-indigo-600/20 rounded-full animate-ping"></div>
+              <div className="relative bg-indigo-600 rounded-[1.5rem] w-full h-full flex items-center justify-center shadow-xl shadow-indigo-600/30">
+                <Loader2 className="text-white animate-spin" size={40} />
               </div>
             </div>
-
+            
             <div className="space-y-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-textcol/70">Progression</span>
-                <span className="font-google-bold text-indigo-600">{Math.round(gradingProgress)}%</span>
+              <h3 className="text-2xl font-google-bold text-textcol">Correction intelligente</h3>
+              <p className="text-sm text-secondary px-4 leading-relaxed">
+                {gradingProgress < 30 ? 'Initialisation de l\'analyse...' : 
+                 gradingProgress < 60 ? 'Extraction des textes manuscrits...' : 
+                 gradingProgress < 90 ? 'Évaluation par l\'intelligence artificielle...' : 
+                 'Finalisation des résultats...'}
+              </p>
+            </div>
+
+            <div className="space-y-4 pt-4">
+              <div className="flex items-center justify-between text-sm font-google-bold">
+                <span className="text-secondary">Progression globale</span>
+                <span className="text-indigo-600">{Math.round(gradingProgress)}%</span>
               </div>
-              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+              <div className="w-full bg-background rounded-full h-2 overflow-hidden border border-border-subtle p-0.5">
                 <div
-                  className="bg-indigo-600 h-full transition-all duration-300 rounded-full"
+                  className="bg-indigo-600 h-full transition-all duration-700 rounded-full shadow-sm"
                   style={{ width: `${gradingProgress}%` }}
                 ></div>
               </div>
+            </div>
+
+            <div className="pt-4">
+              <p className="text-[10px] text-secondary/50 font-medium bg-background border border-border-subtle py-2 rounded-xl">
+                Veuillez ne pas fermer cette fenêtre pendant le processus.
+              </p>
             </div>
           </div>
         </div>
@@ -733,45 +759,41 @@ const ExamDetail: React.FC = () => {
 
       {/* Delete Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-surface rounded-2xl p-8 max-w-md w-full shadow-2xl">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-xl">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-red-600 dark:text-red-400">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-                </svg>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-6 animate-in fade-in transition-all">
+          <div className="bg-surface rounded-[2rem] p-10 max-w-md w-full shadow-2xl border border-border-subtle space-y-8">
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="w-20 h-20 bg-red-50 dark:bg-red-900/10 rounded-full flex items-center justify-center">
+                <AlertTriangle className="text-red-600" size={40} />
               </div>
-              <div>
-                <h3 className="text-xl font-google-bold text-textcol">Confirmer la suppression</h3>
-                <p className="text-sm text-textcol/70 mt-1">Cette action est irréversible</p>
+              <div className="space-y-2">
+                <h3 className="text-2xl font-google-bold text-textcol">Supprimer l'examen</h3>
+                <p className="text-sm text-secondary leading-relaxed">
+                  Êtes-vous sûr de vouloir supprimer <span className="text-textcol font-google-bold">"{exam.titre}"</span> ?
+                  Cette action est définitive et supprimera toutes les données associées.
+                </p>
               </div>
             </div>
-            
-            <p className="text-textcol/70 mb-6">
-              Êtes-vous sûr de vouloir supprimer l'examen <span className="font-google-bold text-textcol">"{exam.titre}"</span> ? 
-              Toutes les copies et données associées seront également supprimées.
-            </p>
 
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-3 pt-4">
               <button
                 onClick={() => setShowDeleteModal(false)}
                 disabled={deleting}
-                className="flex-1 px-4 py-3 bg-background rounded-xl font-google-bold hover:bg-gray-100 dark:hover:bg-gray-800 transition-all disabled:opacity-50"
+                className="flex-1 px-6 py-3.5 bg-background border border-border-subtle text-textcol rounded-xl font-google-bold hover:bg-gray-50 transition-all disabled:opacity-50"
               >
                 Annuler
               </button>
               <button
                 onClick={handleDelete}
                 disabled={deleting}
-                className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl font-google-bold hover:bg-red-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 px-6 py-3.5 bg-red-600 text-white rounded-xl font-google-bold hover:bg-red-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-red-600/20"
               >
                 {deleting ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Suppression...
-                  </>
+                  <Loader2 className="animate-spin" size={20} />
                 ) : (
-                  'Supprimer'
+                  <>
+                    <Trash2 size={20} />
+                    Confirmer
+                  </>
                 )}
               </button>
             </div>

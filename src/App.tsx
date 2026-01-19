@@ -14,6 +14,7 @@ import { Examens } from './components/Dashboard/Examen'
 import { Statistiques } from './components/Dashboard/Statistiques'
 import { Support } from './components/Dashboard/Support'
 import { Parametres } from './components/Dashboard/Parametre'
+import { Notifications } from './components/Dashboard/Notifications'
 import ExamDetail from './pages/ExamDetail'
 import CorrectionResults from './pages/CorrectionResults'
 import ExamsProvider from './exams'
@@ -47,6 +48,7 @@ function App() {
             <Route path="statistiques" element={<Statistiques />} />
             <Route path="support" element={<Support />} />
             <Route path="parametres" element={<Parametres />} />
+            <Route path="notifications" element={<Notifications />} />
           </Route>
 
           {/* 404 - Toujours en dernier */}
