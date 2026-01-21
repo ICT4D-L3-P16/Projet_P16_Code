@@ -10,11 +10,14 @@ import {
   LogOut,
   ShieldCheck,
   Smartphone,
-  ChevronRight
+  ChevronRight,
+  Check
 } from 'lucide-react'
+import { useNotifications } from '../../notifications'
 
 export const Parametres: React.FC = () => {
   const [activeTab, setActiveTab] = useState('profile')
+  const { preferences, updatePreferences } = useNotifications()
 
   const tabs = [
     { id: 'profile', label: 'Profil', icon: User },
@@ -164,7 +167,56 @@ export const Parametres: React.FC = () => {
             </div>
           )}
 
-          {activeTab !== 'profile' && (
+          {activeTab === 'notifications' && (
+            <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
+              <section className="bg-surface border border-border-subtle rounded-[2rem] p-8 card-shadow shadow-sm">
+                <h2 className="text-xl font-google-bold text-textcol mb-2">Préférences de notification</h2>
+                <p className="text-sm text-secondary mb-8">Choisissez les alertes que vous souhaitez recevoir.</p>
+                
+                <div className="space-y-6">
+                  {/* Correction Notification */}
+                  <div className="flex items-center justify-between p-6 bg-background border border-border-subtle rounded-2xl group hover:border-primary/30 transition-all">
+                    <div className="space-y-1">
+                      <h4 className="font-google-bold text-textcol">Nouvelle correction</h4>
+                      <p className="text-xs text-secondary leading-relaxed">Recevoir une notification lorsqu'une nouvelle correction est terminée.</p>
+                    </div>
+                    <button 
+                      onClick={() => updatePreferences({ newCorrection: !preferences.newCorrection })}
+                      className={`relative inline-flex h-7 w-14 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${preferences.newCorrection ? 'bg-primary' : 'bg-gray-200 dark:bg-gray-800'}`}
+                    >
+                      <span className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${preferences.newCorrection ? 'translate-x-7' : 'translate-x-0'}`} />
+                    </button>
+                  </div>
+
+                  {/* Validation Notification */}
+                  <div className="flex items-center justify-between p-6 bg-background border border-border-subtle rounded-2xl group hover:border-primary/30 transition-all">
+                    <div className="space-y-1">
+                      <h4 className="font-google-bold text-textcol">Validation de copie</h4>
+                      <p className="text-xs text-secondary leading-relaxed">Recevoir une notification quand une correction est validée officiellement.</p>
+                    </div>
+                    <button 
+                      onClick={() => updatePreferences({ validation: !preferences.validation })}
+                      className={`relative inline-flex h-7 w-14 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${preferences.validation ? 'bg-primary' : 'bg-gray-200 dark:bg-gray-800'}`}
+                    >
+                      <span className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${preferences.validation ? 'translate-x-7' : 'translate-x-0'}`} />
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <div className="p-6 bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-900/20 rounded-[2rem] flex items-start gap-4">
+                <div className="p-2 bg-indigo-600 rounded-xl text-white">
+                  <Check size={20} />
+                </div>
+                <div>
+                  <h4 className="font-google-bold text-textcol text-sm">Synchronisation active</h4>
+                  <p className="text-xs text-secondary mt-1">Vos préférences sont automatiquement synchronisées sur tous vos appareils.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab !== 'profile' && activeTab !== 'notifications' && (
             <div className="bg-surface border border-border-subtle rounded-[2.5rem] p-12 text-center space-y-4 animate-in fade-in duration-300 h-full flex flex-col items-center justify-center card-shadow">
               <div className="p-6 bg-background rounded-[2rem] border border-dashed border-border-subtle">
                 <Settings size={64} className="text-border-subtle animate-spin-slow" />

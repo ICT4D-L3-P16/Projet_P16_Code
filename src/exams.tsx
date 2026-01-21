@@ -34,7 +34,7 @@ export type Exam = {
   classe?: string
   matiere: string
   dateExamen: string
-  statut: 'brouillon' | 'publie' | 'termine'
+  statut: 'brouillon' | 'publie' | 'termine' | 'valide'
   epreuve?: Epreuve
   corrige?: Corrige
   copies: StudentFile[]
@@ -60,6 +60,8 @@ type ExamsContextType = {
   addStudentFiles: (examId: string, files: File[]) => Promise<StudentFile[]>
   refreshExams: () => Promise<void>
   deleteExam: (examId: string) => Promise<boolean>
+  updateExamStatus: (examId: string, status: Exam['statut']) => Promise<boolean>
+  validateExam: (examId: string) => Promise<boolean>
 }
 
 const ExamsContext = createContext<ExamsContextType | undefined>(undefined)
@@ -422,6 +424,39 @@ export const ExamsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }
 
+  // Fonction pour mettre à jour le statut d'un examen
+  const updateExamStatus = async (examId: string, status: Exam['statut']): Promise<boolean> => {
+    if (!user) {
+      setError('Utilisateur non authentifié')
+      return false
+    }
+
+    try {
+      setError(null)
+      const { error: updateError } = await supabase
+        .from('examens')
+        .update({ statut: status })
+        .eq('id', examId)
+
+      if (updateError) throw updateError
+
+      // Mettre à jour l'état local
+      setExams((prev) =>
+        prev.map((ex) => (ex.id === examId ? { ...ex, statut: status } : ex))
+      )
+      return true
+    } catch (err: any) {
+      console.error('Erreur lors de la mise à jour du statut:', err)
+      setError(err.message || 'Erreur lors de la mise à jour du statut')
+      return false
+    }
+  }
+
+  // Fonction pour valider un examen
+  const validateExam = async (examId: string): Promise<boolean> => {
+    return updateExamStatus(examId, 'valide')
+  }
+
   return (
     <ExamsContext.Provider
       value={{
@@ -431,7 +466,9 @@ export const ExamsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         createExam,
         addStudentFiles,
         refreshExams,
-        deleteExam
+        deleteExam,
+        updateExamStatus,
+        validateExam
       }}
     >
       {children}

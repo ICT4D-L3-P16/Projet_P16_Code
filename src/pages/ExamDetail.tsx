@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useExams } from '../exams'
+import { useNotifications } from '../notifications'
 import { 
   ChevronLeft, 
   Trash2, 
@@ -13,22 +14,26 @@ import {
   UploadCloud,
   FileText,
   Clock,
+  Loader2,
+  FileCheck,
+  Settings,
   LayoutDashboard,
   CheckCircle2,
-  X,
-  Loader2,
-  FileCheck
+  X
 } from 'lucide-react'
 
 const ExamDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { exams, addStudentFiles, deleteExam, isLoading } = useExams()
+  const { exams, addStudentFiles, deleteExam, isLoading, updateExamStatus } = useExams()
+  const { addNotification } = useNotifications()
   const [files, setFiles] = useState<FileList | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [viewMode, setViewMode] = useState<'management' | 'results'>('management')
+  const [hasStoredResults, setHasStoredResults] = useState(false)
 
   // Correction state
   const [grading, setGrading] = useState(false)
@@ -40,7 +45,19 @@ const ExamDetail: React.FC = () => {
     if (!isLoading && !exam) {
       navigate('/dashboard/examens')
     }
-  }, [exam, isLoading, navigate])
+    
+    // Check for existing results
+    if (id) {
+      const saved = sessionStorage.getItem(`correction_${id}`)
+      if (saved) {
+        setHasStoredResults(true)
+        // Auto-switch to results view if already corrected or validated
+        if (exam?.statut === 'valide' || exam?.statut === 'termine') {
+          setViewMode('results')
+        }
+      }
+    }
+  }, [exam, isLoading, navigate, id])
 
  const handleCorrection = async () => {
   if (grading) return
@@ -197,6 +214,16 @@ const ExamDetail: React.FC = () => {
 
     setGrading(false)
     setGradingProgress(0)
+
+    // Reset status to brouillon and send notification
+    await updateExamStatus(exam.id, 'brouillon')
+    await addNotification({
+      title: 'Nouvelle correction effectuée',
+      message: `Une nouvelle correction a été effectuée sur l'examen "${exam.titre}".`,
+      link: `/dashboard/examens/${exam.id}/resultats`,
+      type: 'info'
+    })
+
     navigate(`/dashboard/examens/${exam.id}/resultats`, { state: { results: finalResults } })
 
   } catch (error) {
@@ -300,6 +327,16 @@ const ExamDetail: React.FC = () => {
     setTimeout(() => {
       setGrading(false)
       setGradingProgress(0)
+
+      // Reset status and send notification for mock too
+      updateExamStatus(exam.id, 'brouillon')
+      addNotification({
+        title: 'Nouvelle correction effectuée (Mock)',
+        message: `Une nouvelle correction a été effectuée sur l'examen "${exam.titre}".`,
+        link: `/dashboard/examens/${exam.id}/resultats`,
+        type: 'info'
+      })
+
       navigate(`/dashboard/examens/${exam.id}/resultats`, { state: { results: mockResults } })
     }, 500)
   }
@@ -392,7 +429,8 @@ const ExamDetail: React.FC = () => {
     const badges = {
       brouillon: { text: 'Brouillon', className: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400' },
       publie: { text: 'Publié', className: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' },
-      termine: { text: 'Terminé', className: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' }
+      termine: { text: 'Terminé', className: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' },
+      valide: { text: 'Validé', className: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' }
     }
     const badge = badges[exam.statut] || badges.brouillon
     return (
@@ -442,6 +480,15 @@ const ExamDetail: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-3">
+            {hasStoredResults && (
+              <button
+                onClick={() => navigate(`/dashboard/examens/${id}/resultats`)}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-google-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/20"
+              >
+                <FileCheck size={16} />
+                Voir les résultats
+              </button>
+            )}
             <button
               onClick={() => setShowDeleteModal(true)}
               className="flex items-center gap-2 px-4 py-2 text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/10 dark:hover:bg-red-900/20 rounded-xl text-sm font-google-bold transition-all"
@@ -451,10 +498,67 @@ const ExamDetail: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Mode Switcher if Results Exist */}
+        {hasStoredResults && (
+          <div className="flex bg-background dark:bg-black/20 p-1 rounded-2xl border border-border-subtle w-fit mb-4">
+            <button
+              onClick={() => setViewMode('results')}
+              className={`px-6 py-2 rounded-xl text-sm font-google-bold transition-all flex items-center gap-2 ${
+                viewMode === 'results' ? 'bg-indigo-600 text-white shadow-md' : 'text-secondary hover:text-textcol'
+              }`}
+            >
+              <LayoutDashboard size={16} />
+              Vue Résultats
+            </button>
+            <button
+              onClick={() => setViewMode('management')}
+              className={`px-6 py-2 rounded-xl text-sm font-google-bold transition-all flex items-center gap-2 ${
+                viewMode === 'management' ? 'bg-primary text-white shadow-md' : 'text-secondary hover:text-textcol'
+              }`}
+            >
+              <Settings size={16} />
+              Gestion & Imports
+            </button>
+          </div>
+        )}
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left Column - Files Section */}
+        {(viewMode === 'results' && hasStoredResults) ? (
+          <div className="lg:col-span-3">
+             {/* Quick Results Summary Component (Inline) */}
+             <div className="bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-900/20 rounded-3xl p-10 text-center space-y-6">
+                <div className="mx-auto w-24 h-24 bg-white dark:bg-indigo-900/30 rounded-full flex items-center justify-center shadow-inner">
+                  <CheckCircle2 size={48} className="text-indigo-600" />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-google-bold text-textcol">Examen déjà corrigé</h3>
+                  <p className="text-secondary max-w-md mx-auto mt-2">
+                    Tous les résultats sont disponibles. Vous pouvez les consulter, exporter les copies ou valider officiellement la session.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center justify-center gap-4">
+                  <button 
+                    onClick={() => navigate(`/dashboard/examens/${id}/resultats`)}
+                    className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-google-bold shadow-xl shadow-indigo-600/20 hover:scale-[1.02] transition-all flex items-center gap-2"
+                  >
+                    <LayoutDashboard size={20} />
+                    Accéder aux résultats complets
+                  </button>
+                  <button 
+                    onClick={() => setViewMode('management')}
+                    className="px-8 py-3 bg-white dark:bg-black/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-900/30 rounded-xl font-google-bold hover:bg-indigo-50 transition-all flex items-center gap-2"
+                  >
+                    <Settings size={20} />
+                    Retour au mode gestion
+                  </button>
+                </div>
+             </div>
+          </div>
+        ) : (
+          <>
+            {/* Left Column - Files Section */}
         <div className="lg:col-span-1 space-y-6">
           {/* Épreuve */}
           <div className="bg-surface border border-border-subtle rounded-3xl p-6 card-shadow shadow-sm hover:shadow-md transition-all">
@@ -712,7 +816,9 @@ const ExamDetail: React.FC = () => {
             )}
           </section>
         </div>
-      </div>
+      </>
+    )}
+  </div>
 
       {/* Grading Modal */}
       {grading && (

@@ -1,13 +1,19 @@
 import React, { useMemo, useState } from 'react'
 import { useLocation, useParams, useNavigate } from 'react-router-dom'
 import { useExams } from '../exams'
+import { useNotifications } from '../notifications'
+import { CheckCircle, FileText, FileJson, ChevronDown, ChevronUp, Settings } from 'lucide-react'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 const CorrectionResults: React.FC = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const location = useLocation()
-  const { exams } = useExams()
+  const { exams, validateExam } = useExams()
+  const { addNotification } = useNotifications()
   const exam = exams.find((e) => e.id === id)
+  const [isValidating, setIsValidating] = useState(false)
 
   // Try location state first, then fallback to sessionStorage
   const results = useMemo(() => {
@@ -39,35 +45,115 @@ const CorrectionResults: React.FC = () => {
     )
   }
 
-  const downloadJson = () => {
-    const blob = new Blob([JSON.stringify(results, null, 2)], { type: 'application/json' })
+  const downloadJson = (data: any, fileName: string) => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `correction_${results.examId}.json`
+    a.download = `${fileName}.json`
     document.body.appendChild(a)
     a.click()
     a.remove()
     URL.revokeObjectURL(url)
   }
 
-  // Fetch history from API
-  const [history, setHistory] = useState<any[] | null>(null)
-  const [loadingHistory, setLoadingHistory] = useState(false)
+  const downloadCsv = (data: any[], headers: string[], fileName: string) => {
+    const csvContent = [
+      headers.join(','),
+      ...data.map(row => headers.map(header => {
+        const value = row[header] ?? ''
+        return typeof value === 'string' && value.includes(',') ? `"${value}"` : value
+      }).join(','))
+    ].join('\n')
 
-  const refreshHistory = async () => {
-    setLoadingHistory(true)
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${fileName}.csv`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
+
+  const exportBulkPdf = () => {
+    if (!results) return
+    const doc = new jsPDF()
+    
+    doc.setFontSize(18)
+    doc.text(`Rapport de Correction : ${exam?.titre || 'Examen'}`, 14, 20)
+    
+    doc.setFontSize(12)
+    doc.text(`Matière: ${exam?.matiere || 'N/A'}`, 14, 30)
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 37)
+    
+    const tableData = results.copies.map((c: any) => [
+      c.nomEleve,
+      `${c.note}/${c.maxNote}`,
+      `${c.pourcent}%`
+    ])
+
+    autoTable(doc, {
+      startY: 45,
+      head: [['Étudiant', 'Note', 'Pourcentage']],
+      body: tableData,
+    })
+
+    doc.save(`resultats_${exam?.titre || id}.pdf`)
+  }
+
+  const exportIndividualPdf = (copy: any) => {
+    const doc = new jsPDF()
+    
+    doc.setFontSize(18)
+    doc.text(`Copie : ${copy.nomEleve}`, 14, 20)
+    doc.setFontSize(12)
+    doc.text(`Examen: ${exam?.titre || 'Examen'}`, 14, 30)
+    doc.text(`Matière: ${exam?.matiere || 'N/A'}`, 14, 37)
+    doc.text(`Note Totale: ${copy.note}/${copy.maxNote} (${copy.pourcent}%)`, 14, 44)
+    
+    const tableData = copy.details.map((d: any) => [
+      `Q${d.question}`,
+      d.type.toUpperCase(),
+      d.reponse,
+      `${d.points}/${d.maxPoints}`,
+      d.comment || '-'
+    ])
+
+    autoTable(doc, {
+      startY: 55,
+      head: [['Question', 'Type', 'Réponse', 'Points', 'Commentaire']],
+      body: tableData,
+    })
+
+    doc.save(`copie_${copy.nomEleve}_${exam?.titre || id}.pdf`)
+  }
+
+  const handleValidation = async () => {
+    if (!id || isValidating) return
+    setIsValidating(true)
     try {
-      const api = await import('../lib/correctionApi')
-      const data = await api.default.getResults()
-      setHistory(data)
+      const success = await validateExam(id)
+      if (success) {
+        await addNotification({
+          title: 'Examen validé',
+          message: `La correction de l'examen "${exam?.titre}" a été validée officiellement.`,
+          link: `/dashboard/examens/${id}`,
+          type: 'success'
+        })
+        alert('Correction validée avec succès !')
+      }
     } catch (err) {
-      console.error('Impossible de charger l\'historique', err)
-      setHistory(null)
+      console.error('Erreur lors de la validation:', err)
+      alert('Une erreur est survenue lors de la validation.')
     } finally {
-      setLoadingHistory(false)
+      setIsValidating(false)
     }
   }
+
+  // History fetching disabled
+  const history: any[] = []
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -90,12 +176,47 @@ const CorrectionResults: React.FC = () => {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <button onClick={downloadJson} className="px-4 py-2 bg-primary text-white rounded-xl">Télécharger JSON</button>
-          <button onClick={() => navigate('/dashboard/examens')} className="px-4 py-2 bg-background rounded-xl">Retour aux examens</button>
-          <button onClick={refreshHistory} disabled={loadingHistory} className="px-4 py-2 bg-indigo-600 text-white rounded-xl">
-            {loadingHistory ? 'Chargement...' : 'Rafraîchir l\'historique'}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex bg-white/50 dark:bg-black/20 p-1 rounded-xl border border-primary/10">
+            <button 
+              onClick={() => downloadJson(results, `resultats_${id}`)} 
+              className="p-2 hover:bg-primary/10 rounded-lg transition-colors flex items-center gap-2 text-sm font-medium"
+              title="Exporter tout en JSON"
+            >
+              <FileJson size={16} /> JSON
+            </button>
+            <button 
+              onClick={() => downloadCsv(results.copies, ['nomEleve', 'note', 'maxNote', 'pourcent'], `resultats_${id}`)} 
+              className="p-2 hover:bg-primary/10 rounded-lg transition-colors flex items-center gap-2 text-sm font-medium"
+              title="Exporter tout en CSV"
+            >
+              <FileText size={16} /> CSV
+            </button>
+            <button 
+              onClick={exportBulkPdf} 
+              className="p-2 hover:bg-primary/10 rounded-lg transition-colors flex items-center gap-2 text-sm font-medium"
+              title="Exporter tout en PDF"
+            >
+              <FileText size={16} /> PDF
+            </button>
+          </div>
+
+          <button 
+            onClick={handleValidation} 
+            disabled={isValidating || exam?.statut === 'valide'}
+            className={`px-4 py-2 rounded-xl font-google-bold flex items-center gap-2 shadow-lg transition-all ${
+              exam?.statut === 'valide' 
+                ? 'bg-green-100 text-green-700 cursor-not-allowed' 
+                : 'bg-green-600 text-white hover:bg-green-700 shadow-green-600/20'
+            }`}
+          >
+            {isValidating ? 'Validation...' : exam?.statut === 'valide' ? <><CheckCircle size={18} /> Validé</> : <><CheckCircle size={18} /> Valider la correction</>}
           </button>
+          
+          <button onClick={() => navigate(`/dashboard/examens/${id}`)} className="px-4 py-2 bg-background border border-border-subtle rounded-xl text-sm font-google-bold flex items-center gap-2">
+            <Settings size={16} /> Gérer l'examen
+          </button>
+          <button onClick={() => navigate('/dashboard/examens')} className="px-4 py-2 bg-background border border-border-subtle rounded-xl text-sm font-google-bold">Quitter</button>
         </div>
       </div>
 
@@ -126,14 +247,39 @@ const CorrectionResults: React.FC = () => {
                   <div className="font-google-bold text-textcol">{c.nomEleve}</div>
                   <div className="text-sm text-textcol/70">Note: <span className="font-google-bold">{c.note}/{c.maxNote}</span> • <span className="font-google-bold">{c.pourcent}%</span></div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex border border-border-subtle rounded-lg overflow-hidden mr-2">
+                    <button 
+                      onClick={() => downloadJson(c, `copie_${c.nomEleve}`)} 
+                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      title="JSON"
+                    >
+                      <FileJson size={14} className="text-secondary" />
+                    </button>
+                    <button 
+                      onClick={() => downloadCsv(c.details, ['question', 'type', 'reponse', 'points', 'maxPoints'], `copie_${c.nomEleve}`)} 
+                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border-l border-border-subtle"
+                      title="CSV"
+                    >
+                      <FileText size={14} className="text-secondary" />
+                    </button>
+                    <button 
+                      onClick={() => exportIndividualPdf(c)} 
+                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border-l border-border-subtle"
+                      title="PDF"
+                    >
+                      <FileText size={14} className="text-secondary" />
+                    </button>
+                  </div>
                   <div className={`px-3 py-1 rounded-full text-sm font-google-bold ${c.pourcent >= 80 ? 'bg-green-100 text-green-700' : c.pourcent >= 50 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
                     {c.pourcent}%
                   </div>
                   <button
-                    className="px-3 py-2 bg-primary text-white rounded-lg"
+                    className="p-2 hover:bg-primary/5 rounded-lg text-primary transition-all"
                     onClick={() => setExpandedId(expandedId === c.id ? null : c.id)}
-                  >{expandedId === c.id ? 'Fermer' : 'Détails'}</button>
+                  >
+                    {expandedId === c.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                  </button>
                 </div>
               </div>
 

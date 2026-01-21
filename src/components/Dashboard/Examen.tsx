@@ -77,7 +77,8 @@ export const Examens: React.FC = () => {
     const badges = {
       brouillon: { text: 'Brouillon', className: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400' },
       publie: { text: 'Publié', className: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' },
-      termine: { text: 'Terminé', className: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' }
+      termine: { text: 'Terminé', className: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' },
+      valide: { text: 'Validé', className: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400' }
     }
     const badge = badges[statut as keyof typeof badges] || badges.brouillon
     return (

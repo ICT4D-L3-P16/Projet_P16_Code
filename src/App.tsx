@@ -18,11 +18,13 @@ import { Notifications } from './components/Dashboard/Notifications'
 import ExamDetail from './pages/ExamDetail'
 import CorrectionResults from './pages/CorrectionResults'
 import ExamsProvider from './exams'
+import { NotificationsProvider } from './notifications'
 
 function App() {
   return (
     <AuthProvider> {/* Le provider englobe toute l'application */}
-      <ExamsProvider>
+      <NotificationsProvider>
+        <ExamsProvider>
         <Routes>
           {/* Routes Publiques */}
           <Route path="/" element={<LandingPage />} />
@@ -55,8 +57,7 @@ function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </ExamsProvider>
-        
-        
+      </NotificationsProvider>
     </AuthProvider>
   )
 }
