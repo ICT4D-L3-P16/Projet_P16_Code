@@ -177,7 +177,15 @@ export const Examens: React.FC = () => {
                   <h3 className="text-lg font-google-bold text-textcol mb-1 group-hover:text-primary transition-colors truncate">
                     {ex.titre}
                   </h3>
-                  <p className="text-sm text-secondary font-medium mb-4">{ex.matiere}</p>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    <p className="text-sm text-secondary font-medium">{ex.matiere}</p>
+                    {ex.team_nom && (
+                      <span className="flex items-center gap-1 text-[10px] bg-primary/5 text-primary px-2 py-0.5 rounded-lg border border-primary/10 font-google-bold">
+                        <Users size={10} />
+                        {ex.team_nom}
+                      </span>
+                    )}
+                  </div>
                   
                   <div className="space-y-2.5">
                     {ex.classe && (

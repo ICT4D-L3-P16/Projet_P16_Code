@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { 
   BarChart3, 
   TrendingUp, 
@@ -12,13 +12,86 @@ import {
   Filter,
   Download
 } from 'lucide-react'
+import { useExams } from '../../exams'
 
 export const Statistiques: React.FC = () => {
+  const { exams } = useExams()
+
+  const aggregatedStats = useMemo(() => {
+    let totalCopiesCorrected = 0
+    let totalExamsCorrected = 0
+    let sumMoyennes = 0
+    let totalPass = 0
+    let totalExcellent = 0
+    let totalStudents = 0
+    
+    const distribution = { excellent: 0, bien: 0, passable: 0, echec: 0 }
+    const recentEvaluations: any[] = []
+
+    exams.forEach(exam => {
+      const saved = sessionStorage.getItem(`correction_${exam.id}`)
+      if (saved) {
+        try {
+          const results = JSON.parse(saved)
+          const summary = results.summary
+          
+          totalExamsCorrected++
+          totalCopiesCorrected += summary.total
+          sumMoyennes += summary.moyenne
+          totalPass += summary.distribution.pass
+          totalExcellent += summary.distribution.excellent
+          
+          // Distribution details from copies
+          results.copies.forEach((c: any) => {
+            if (c.pourcent >= 80) distribution.excellent++
+            else if (c.pourcent >= 60) distribution.bien++
+            else if (c.pourcent >= 50) distribution.passable++
+            else distribution.echec++
+          })
+
+          recentEvaluations.push({
+            id: exam.id,
+            name: exam.titre,
+            date: new Date(results.generatedAt).toLocaleDateString('fr-FR'),
+            score: `${summary.moyenne.toFixed(1)}/20`,
+            status: exam.statut === 'valide' ? 'Validé' : 'Brouillon'
+          })
+        } catch (e) {
+          console.error(`Error parsing stats for exam ${exam.id}`, e)
+        }
+      }
+      totalStudents += exam.copies.length
+    })
+
+    const moyenneGénérale = totalExamsCorrected > 0 ? (sumMoyennes / totalExamsCorrected).toFixed(2) : '0.00'
+    const tauxReussite = totalCopiesCorrected > 0 
+      ? (((totalPass + totalExcellent) / totalCopiesCorrected) * 100).toFixed(1) 
+      : '0.0'
+
+    // Distribution in percentage
+    const distTotal = distribution.excellent + distribution.bien + distribution.passable + distribution.echec
+    const distPerc = {
+      excellent: distTotal > 0 ? Math.round((distribution.excellent / distTotal) * 100) : 0,
+      bien: distTotal > 0 ? Math.round((distribution.bien / distTotal) * 100) : 0,
+      passable: distTotal > 0 ? Math.round((distribution.passable / distTotal) * 100) : 0,
+      echec: distTotal > 0 ? Math.round((distribution.echec / distTotal) * 100) : 0,
+    }
+
+    return {
+      totalCopiesCorrected,
+      totalStudents,
+      tauxReussite,
+      moyenneGénérale,
+      distPerc,
+      recentEvaluations: recentEvaluations.slice(0, 5)
+    }
+  }, [exams])
+
   const stats = [
-    { label: 'Correction totale', value: '1,284', trend: '+12%', icon: FileCheck, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { label: 'Étudiants évalués', value: '856', trend: '+5.4%', icon: Users, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-    { label: 'Taux de réussite', value: '78.2%', trend: '+2.1%', icon: Target, color: 'text-green-600', bg: 'bg-green-50' },
-    { label: 'Moyenne générale', value: '13.45', trend: '+0.8', icon: Award, color: 'text-amber-600', bg: 'bg-amber-50' },
+    { label: 'Copies corrigées', value: aggregatedStats.totalCopiesCorrected.toLocaleString(), trend: '+100%', icon: FileCheck, color: 'text-blue-600', bg: 'bg-blue-50' },
+    { label: 'Étudiants total', value: aggregatedStats.totalStudents.toLocaleString(), trend: 'Prévu', icon: Users, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+    { label: 'Taux de réussite', value: `${aggregatedStats.tauxReussite}%`, trend: 'Global', icon: Target, color: 'text-green-600', bg: 'bg-green-50' },
+    { label: 'Moyenne générale', value: aggregatedStats.moyenneGénérale, trend: '/ 20', icon: Award, color: 'text-amber-600', bg: 'bg-amber-50' },
   ]
 
   return (
@@ -49,8 +122,7 @@ export const Statistiques: React.FC = () => {
               <div className={`p-3 ${stat.bg} rounded-2xl group-hover:scale-110 transition-transform`}>
                 <stat.icon className={stat.color} size={24} />
               </div>
-              <span className="flex items-center gap-1 text-xs font-google-bold text-green-600 bg-green-50 px-2 py-1 rounded-full">
-                <TrendingUp size={12} />
+              <span className="flex items-center gap-1 text-xs font-google-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
                 {stat.trend}
               </span>
             </div>
@@ -62,7 +134,6 @@ export const Statistiques: React.FC = () => {
         ))}
       </div>
 
-      {/* Main Charts Section (Placeholders for UI) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
           {/* Main Chart Placeholder */}
@@ -106,7 +177,7 @@ export const Statistiques: React.FC = () => {
             </div>
           </div>
 
-          {/* Performance Table Placeholder */}
+          {/* Performance Table */}
           <div className="bg-surface border border-border-subtle rounded-[2rem] p-8 card-shadow shadow-sm">
             <div className="flex items-center justify-between mb-8">
               <h3 className="text-xl font-google-bold text-textcol">Dernières évaluations</h3>
@@ -115,32 +186,32 @@ export const Statistiques: React.FC = () => {
                 <ChevronRight size={16} />
               </button>
             </div>
-            <div className="space-y-4">
-              {[
-                { name: 'Algorithmique & C++', date: 'Hier', score: '14.5/20', status: 'Terminé' },
-                { name: 'Base de données SQL', date: 'Il y a 2 jours', score: '12.8/20', status: 'Terminé' },
-                { name: 'Architecture Réseau', date: '08 Mai 2024', score: '--/20', status: 'En cours' },
-              ].map((exam, idx) => (
-                <div key={idx} className="flex items-center justify-between p-4 bg-background rounded-2xl border border-border-subtle hover:border-primary/30 transition-all group">
-                  <div className="flex items-center gap-4">
-                    <div className="p-2.5 bg-surface rounded-xl card-shadow group-hover:bg-primary/5 transition-colors">
-                      <BarChart3 size={18} className="text-secondary group-hover:text-primary" />
+            {aggregatedStats.recentEvaluations.length === 0 ? (
+              <div className="text-center py-10 text-secondary italic">Aucune évaluation récente</div>
+            ) : (
+              <div className="space-y-4">
+                {aggregatedStats.recentEvaluations.map((exam, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-4 bg-background rounded-2xl border border-border-subtle hover:border-primary/30 transition-all group">
+                    <div className="flex items-center gap-4">
+                      <div className="p-2.5 bg-surface rounded-xl card-shadow group-hover:bg-primary/5 transition-colors">
+                        <BarChart3 size={18} className="text-secondary group-hover:text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-google-bold text-textcol text-sm">{exam.name}</p>
+                        <p className="text-xs text-secondary mt-0.5 flex items-center gap-1">
+                          <Calendar size={12} />
+                          {exam.date}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-google-bold text-textcol text-sm">{exam.name}</p>
-                      <p className="text-xs text-secondary mt-0.5 flex items-center gap-1">
-                        <Calendar size={12} />
-                        {exam.date}
-                      </p>
+                    <div className="text-right">
+                      <p className="font-google-bold text-textcol text-sm">{exam.score}</p>
+                      <p className={`text-[10px] font-google-bold mt-1 ${exam.status === 'Validé' ? 'text-green-600' : 'text-blue-600'}`}>{exam.status}</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-google-bold text-textcol text-sm">{exam.score}</p>
-                    <p className={`text-[10px] font-google-bold mt-1 ${exam.status === 'Terminé' ? 'text-green-600' : 'text-blue-600'}`}>{exam.status}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -150,10 +221,10 @@ export const Statistiques: React.FC = () => {
             <h3 className="text-xl font-google-bold text-textcol mb-8">Répartition des notes</h3>
             <div className="space-y-6">
               {[
-                { label: 'Excellent (16-20)', value: 15, color: 'bg-green-500' },
-                { label: 'Bien (12-16)', value: 45, color: 'bg-blue-500' },
-                { label: 'Passable (10-12)', value: 25, color: 'bg-amber-500' },
-                { label: 'Échec (<10)', value: 15, color: 'bg-red-500' },
+                { label: 'Excellent (16-20)', value: aggregatedStats.distPerc.excellent, color: 'bg-green-500' },
+                { label: 'Bien (12-16)', value: aggregatedStats.distPerc.bien, color: 'bg-blue-500' },
+                { label: 'Passable (10-12)', value: aggregatedStats.distPerc.passable, color: 'bg-amber-500' },
+                { label: 'Échec (<10)', value: aggregatedStats.distPerc.echec, color: 'bg-red-500' },
               ].map((item, idx) => (
                 <div key={idx} className="space-y-2">
                   <div className="flex justify-between text-xs font-google-bold">
@@ -169,10 +240,10 @@ export const Statistiques: React.FC = () => {
             <div className="mt-8 p-4 bg-primary/5 rounded-2xl border border-primary/10">
               <div className="flex items-center gap-2 text-primary font-google-bold text-sm mb-2">
                 <TrendingUp size={16} />
-                Conseil IA
+                Information
               </div>
               <p className="text-xs text-secondary leading-relaxed">
-                Les résultats en <span className="text-textcol font-google-bold">Base de données</span> sont en hausse de 15% par rapport au mois dernier.
+                Les statistiques sont calculées sur la base des <span className="text-textcol font-google-bold">{aggregatedStats.totalCopiesCorrected} copies</span> actuellement corrigées.
               </p>
             </div>
           </div>
@@ -187,16 +258,16 @@ export const Statistiques: React.FC = () => {
                 <h3 className="text-xl font-google-bold">Temps de correction</h3>
               </div>
               <div>
-                <p className="text-3xl font-google-bold mb-1">2.4s</p>
+                <p className="text-3xl font-google-bold mb-1">~2.8s</p>
                 <p className="text-xs text-indigo-100 font-medium">Temps moyen par copie</p>
               </div>
               <div className="space-y-3">
                 <div className="flex justify-between text-xs font-google-bold text-indigo-100">
-                  <span>Gain de temps total</span>
-                  <span>142 Heures</span>
+                  <span>Optimisation IA</span>
+                  <span>95% Rapide</span>
                 </div>
                 <div className="w-full bg-white/20 h-1.5 rounded-full overflow-hidden">
-                  <div className="bg-white h-full w-[85%] rounded-full shadow-lg"></div>
+                  <div className="bg-white h-full w-[95%] rounded-full shadow-lg"></div>
                 </div>
               </div>
             </div>

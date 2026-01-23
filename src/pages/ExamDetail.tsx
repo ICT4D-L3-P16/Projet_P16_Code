@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useExams } from '../exams'
 import { useNotifications } from '../notifications'
+import { useTeams } from '../teams'
+import type { TeamPermission } from '../teams'
+import { useAuth } from '../context/AuthContext'
 import { 
   ChevronLeft, 
   Trash2, 
@@ -19,8 +22,10 @@ import {
   Settings,
   LayoutDashboard,
   CheckCircle2,
-  X
+  X,
+  Share2
 } from 'lucide-react'
+import { InviteModal } from '../components/Dashboard/InviteModal'
 
 const ExamDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>()
@@ -29,7 +34,6 @@ const ExamDetail: React.FC = () => {
   const { addNotification } = useNotifications()
   const [files, setFiles] = useState<FileList | null>(null)
   const [uploading, setUploading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState(0)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [viewMode, setViewMode] = useState<'management' | 'results'>('management')
@@ -38,6 +42,19 @@ const ExamDetail: React.FC = () => {
   // Correction state
   const [grading, setGrading] = useState(false)
   const [gradingProgress, setGradingProgress] = useState(0)
+  const [showInviteModal, setShowInviteModal] = useState(false)
+  const [showSettingsModal, setShowSettingsModal] = useState(false)
+
+  // Team & Permissions mapping
+  const { user } = useAuth()
+  const { teams, changeExamTeam, getTeamMembers } = useTeams()
+  const [permissions, setPermissions] = useState<TeamPermission>({
+    can_add_copies: true,
+    can_correct: true,
+    can_validate: true,
+    can_view_details: true,
+    can_export: true
+  })
 
   const exam = exams.find((e) => e.id === id)
 
@@ -59,410 +76,218 @@ const ExamDetail: React.FC = () => {
     }
   }, [exam, isLoading, navigate, id])
 
- const handleCorrection = async () => {
-  if (grading) return
-  if (!exam) return
-  if (exam.copies.length === 0) {
-    alert('Aucune copie à corriger')
-    return
-  }
+  useEffect(() => {
+    const fetchPermissions = async () => {
+      if (!exam || !user) return
+      
+      const isOwner = exam.utilisateur_id === user.id
+      if (isOwner) {
+        setPermissions({
+          can_add_copies: true,
+          can_correct: true,
+          can_validate: true,
+          can_view_details: true,
+          can_export: true
+        })
+        return
+      }
 
-  // If epreuve or corrige is missing, ask user to confirm proceeding
-  if (!exam.epreuve || !exam.corrige) {
-    const missing = [!exam.epreuve ? 'épreuve' : null, !exam.corrige ? 'corrigé' : null].filter(Boolean).join(' et ')
-    const ok = window.confirm(`Aucun ${missing} détecté. Voulez-vous continuer la correction sans ces documents ?`)
-    if (!ok) return
-  }
-
-  setGrading(true)
-  setGradingProgress(5)
-
-  // Récupérer l'URL du backend depuis les variables d'environnement
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'
-
-  try {
-    // Progress simulation
-    const progressInterval = setInterval(() => {
-      setGradingProgress((p) => Math.min(90, p + Math.floor(Math.random() * 8) + 2))
-    }, 500)
-
-    // Préparer les fichiers des copies pour l'upload
-    const copyFiles: File[] = []
-    
-    // Récupérer les fichiers des copies depuis les URLs
-    for (const copie of exam.copies) {
-      if (copie.url) {
-        try {
-          const response = await fetch(copie.url)
-          const blob = await response.blob()
-          const file = new File([blob], copie.name, { type: blob.type })
-          copyFiles.push(file)
-        } catch (error) {
-          console.warn(`Impossible de récupérer le fichier: ${copie.name}`, error)
+      if (exam.team_id) {
+        const members = await getTeamMembers(exam.team_id)
+        const myMember = members.find(m => m.utilisateur_id === user.id)
+        if (myMember) {
+          setPermissions(myMember.permissions || {
+            can_add_copies: true,
+            can_correct: true,
+            can_validate: false,
+            can_view_details: true,
+            can_export: false
+          })
         }
       }
     }
 
-    if (copyFiles.length === 0) {
-      throw new Error('Aucun fichier de copie disponible')
-    }
+    fetchPermissions()
+  }, [exam, user, getTeamMembers])
 
-    // Étape 1: OCR des copies
-    setGradingProgress(30)
-    const formData = new FormData()
-    copyFiles.forEach((file) => {
-      formData.append('files', file)
-    })
-
-    const ocrResponse = await fetch(`${API_BASE_URL}/api/ocr`, {
-      method: 'POST',
-      body: formData
-    })
-
-    if (!ocrResponse.ok) {
-      throw new Error('Erreur lors de l\'OCR')
-    }
-
-    const ocrData = await ocrResponse.json()
-    setGradingProgress(60)
-
-    // Étape 2: Correction via LLM
-    const correctResponse = await fetch(`${API_BASE_URL}/api/correct`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        evalData: ocrData.eval
-      })
-    })
-
-    if (!correctResponse.ok) {
-      throw new Error('Erreur lors de la correction')
-    }
-
-    const correctionData = await correctResponse.json()
-    clearInterval(progressInterval)
-    setGradingProgress(100)
-
-    // Transformer les résultats de l'API au format interne
-    const resultat = correctionData.resultat || correctionData
-    const copiesFromApi: any[] = []
-    
-    Object.keys(resultat).forEach((key, index) => {
-      const entry = resultat[key]
-      const originalCopy = exam.copies[index] || exam.copies.find(c => c.name.includes(key))
-      
-      const details = (entry.questions || []).map((q: any) => ({
-        question: q.num || q.question,
-        type: q.type || 'auto',
-        reponse: q.reponse || '–',
-        maxPoints: q.maxPoint || q.point || 1,
-        points: q.point || 0,
-        status: (q.point || 0) === 0 ? 'zero' : (q.point || 0) === (q.maxPoint || q.point || 1) ? 'full' : 'partial',
-        comment: q.commentaire || q.comment || ''
-      }))
-
-      const note = entry.note_totale ?? details.reduce((a: number, b: any) => a + b.points, 0)
-      const maxNote = details.reduce((a: number, b: any) => a + b.maxPoints, 0) || 20
-      const pourcent = Number(((note / maxNote) * 100).toFixed(1))
-
-      copiesFromApi.push({
-        id: originalCopy?.id || key,
-        nomEleve: originalCopy?.name || key,
-        note,
-        maxNote,
-        pourcent,
-        details
-      })
-    })
-
-    // Calculer les statistiques
-    const total = copiesFromApi.length
-    const percents = copiesFromApi.map((c: any) => c.pourcent).sort((a: number, b: number) => a - b)
-    const moy = total > 0 ? Number((percents.reduce((a: number, b: number) => a + b, 0) / total).toFixed(2)) : 0
-    const min = percents[0] ?? 0
-    const max = percents[percents.length - 1] ?? 0
-    const median = total > 0 ? percents[Math.floor(total / 2)] : 0
-    const distribution = {
-      excellent: copiesFromApi.filter((c: any) => c.pourcent >= 80).length,
-      pass: copiesFromApi.filter((c: any) => c.pourcent >= 50 && c.pourcent < 80).length,
-      fail: copiesFromApi.filter((c: any) => c.pourcent < 50).length
-    }
-
-    const finalResults = {
-      examId: exam.id,
-      generatedAt: Date.now(),
-      summary: {
-        total,
-        graded: total,
-        moyenne: moy,
-        min,
-        max,
-        median,
-        distribution
-      },
-      copies: copiesFromApi
-    }
-
-    // Sauvegarder dans sessionStorage
-    try {
-      sessionStorage.setItem(`correction_${exam.id}`, JSON.stringify(finalResults))
-    } catch (e) {
-      console.warn('sessionStorage unavailable')
-    }
-
-    setGrading(false)
-    setGradingProgress(0)
-
-    // Reset status to brouillon and send notification
-    await updateExamStatus(exam.id, 'brouillon')
-    await addNotification({
-      title: 'Nouvelle correction effectuée',
-      message: `Une nouvelle correction a été effectuée sur l'examen "${exam.titre}".`,
-      link: `/dashboard/examens/${exam.id}/resultats`,
-      type: 'info'
-    })
-
-    navigate(`/dashboard/examens/${exam.id}/resultats`, { state: { results: finalResults } })
-
-  } catch (error) {
-    console.error('Erreur pendant la correction:', error)
-    setGrading(false)
-    setGradingProgress(0)
-    
-    // Fallback vers données mockées en cas d'erreur
-    const useMock = window.confirm(
-      'La correction via l\'API a échoué. Voulez-vous utiliser des données de démonstration à la place ?'
-    )
-    
-    if (useMock) {
-      generateMockResults()
-    } else {
-      alert('Erreur lors de la correction. Veuillez réessayer.')
-    }
-  }
-}
-
-  const generateMockResults = () => {
+  const handleCorrection = async () => {
+    if (grading) return
     if (!exam) return
-
-    setGrading(true)
-    setGradingProgress(50)
-
-    const mockResults = {
-      examId: exam.id,
-      generatedAt: Date.now(),
-      summary: {},
-      copies: exam.copies.map((c) => {
-        const numQuestions = 5
-        const chooseType = () => {
-          const r = Math.random()
-          if (r < 0.5) return 'mcq'
-          if (r < 0.8) return 'short'
-          return 'essay'
-        }
-        const commentsPool = {
-          full: ['Très bonne réponse', 'Excellent', 'Réponse complète'],
-          partial: ['Réponse partielle, développer un exemple', 'Manque de précision', 'Bonne idée, mais manque de détails'],
-          zero: ['Réponse incorrecte', 'Hors sujet', 'Aucune réponse']
-        }
-        const questions = Array.from({ length: numQuestions }).map((_, qIdx) => {
-          const type = chooseType()
-          let maxPoints = 1
-          if (type === 'mcq') maxPoints = Math.floor(Math.random() * 2) + 1
-          if (type === 'short') maxPoints = Math.floor(Math.random() * 3) + 2
-          if (type === 'essay') maxPoints = Math.floor(Math.random() * 4) + 3
-          let points = 0
-          let comment = ''
-          if (type === 'mcq') {
-            const correct = Math.random() < 0.6
-            points = correct ? maxPoints : 0
-            comment = correct ? commentsPool.full[Math.floor(Math.random() * commentsPool.full.length)] : commentsPool.zero[Math.floor(Math.random() * commentsPool.zero.length)]
-          } else if (type === 'short') {
-            const p = Math.random()
-            if (p < 0.25) points = 0
-            else if (p < 0.65) points = Math.floor(Math.random() * (maxPoints - 0))
-            else points = maxPoints
-            comment = points === maxPoints ? commentsPool.full[Math.floor(Math.random() * commentsPool.full.length)] : points === 0 ? commentsPool.zero[Math.floor(Math.random() * commentsPool.zero.length)] : commentsPool.partial[Math.floor(Math.random() * commentsPool.partial.length)]
-          } else {
-            const p = Math.random()
-            if (p < 0.15) points = 0
-            else if (p < 0.5) points = Math.floor(Math.random() * Math.max(1, Math.floor(maxPoints / 2)))
-            else if (p < 0.85) points = Math.floor(Math.random() * (maxPoints - 1)) + 1
-            else points = maxPoints
-            comment = points === maxPoints ? 'Très bon développement, arguments et exemples pertinents' : points === 0 ? 'Travail insuffisant, développer vos arguments' : 'Bonne structure, développer davantage certains points'
-          }
-          const status = points === 0 ? 'zero' : points === maxPoints ? 'full' : 'partial'
-          return { question: qIdx + 1, type, reponse: type === 'mcq' ? ['A', 'B', 'C', 'D'][Math.floor(Math.random() * 4)] : (Math.random() < 0.5 ? 'Réponse courte' : 'Réponse rédigée'), maxPoints, points, status, comment }
-        })
-        const note = questions.reduce((a, b) => a + b.points, 0)
-        const maxNote = questions.reduce((a, b) => a + b.maxPoints, 0)
-        const pourcent = Number(((note / (maxNote || 1)) * 100).toFixed(1))
-        return { id: c.id, nomEleve: c.name, note, maxNote, pourcent, details: questions }
-      })
-    }
-
-    const total = mockResults.copies.length
-    const percents = mockResults.copies.map((c: any) => c.pourcent).sort((a: number, b: number) => a - b)
-    const moy = total > 0 ? Number((percents.reduce((a: number, b: number) => a + b, 0) / total).toFixed(2)) : 0
-    const min = percents[0] ?? 0
-    const max = percents[percents.length - 1] ?? 0
-    const median = total > 0 ? percents[Math.floor(total / 2)] : 0
-    const distribution = {
-      excellent: mockResults.copies.filter((c: any) => c.pourcent >= 80).length,
-      pass: mockResults.copies.filter((c: any) => c.pourcent >= 50 && c.pourcent < 80).length,
-      fail: mockResults.copies.filter((c: any) => c.pourcent < 50).length
-    }
-    mockResults.summary = { total, graded: total, moyenne: moy, min, max, median, distribution }
-
-    setGradingProgress(100)
-
-    try {
-      sessionStorage.setItem(`correction_${exam.id}`, JSON.stringify(mockResults))
-    } catch (e) {
-      console.warn('sessionStorage unavailable')
-    }
-
-    setTimeout(() => {
-      setGrading(false)
-      setGradingProgress(0)
-
-      // Reset status and send notification for mock too
-      updateExamStatus(exam.id, 'brouillon')
-      addNotification({
-        title: 'Nouvelle correction effectuée (Mock)',
-        message: `Une nouvelle correction a été effectuée sur l'examen "${exam.titre}".`,
-        link: `/dashboard/examens/${exam.id}/resultats`,
-        type: 'info'
-      })
-
-      navigate(`/dashboard/examens/${exam.id}/resultats`, { state: { results: mockResults } })
-    }, 500)
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-textcol/70">Chargement...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (!exam) {
-    return null
-  }
-
-  const handleUpload = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!files || files.length === 0) {
-      alert('Veuillez sélectionner des fichiers à importer')
+    if (exam.copies.length === 0) {
+      alert('Aucune copie à corriger')
       return
     }
 
-    setUploading(true)
-    setUploadProgress(0)
+    if (!exam.epreuve || !exam.corrige) {
+      const missing = [!exam.epreuve ? 'épreuve' : null, !exam.corrige ? 'corrigé' : null].filter(Boolean).join(' et ')
+      const ok = window.confirm(`Aucun ${missing} détecté. Voulez-vous continuer la correction sans ces documents ?`)
+      if (!ok) return
+    }
+
+    setGrading(true)
+    setGradingProgress(5)
+
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'
 
     try {
-      const fileArray = Array.from(files)
-      const totalFiles = fileArray.length
+      const progressInterval = setInterval(() => {
+        setGradingProgress((p) => Math.min(90, p + Math.floor(Math.random() * 8) + 2))
+      }, 500)
 
-      for (let i = 0; i < fileArray.length; i++) {
-        await addStudentFiles(exam.id, [fileArray[i]])
-        setUploadProgress(((i + 1) / totalFiles) * 100)
+      const copyFiles: File[] = []
+      
+      for (const copie of exam.copies) {
+        if (copie.url) {
+          try {
+            const response = await fetch(copie.url)
+            const blob = await response.blob()
+            const file = new File([blob], copie.name, { type: blob.type })
+            copyFiles.push(file)
+          } catch (error) {
+            console.error(`Erreur chargement copie ${copie.name}:`, error)
+          }
+        }
       }
 
-      setFiles(null)
-      const fileInput = document.getElementById('student-files') as HTMLInputElement
-      if (fileInput) fileInput.value = ''
+      if (copyFiles.length === 0) throw new Error('Impossible de charger les fichiers des copies')
 
-      alert(`${totalFiles} copie(s) importée(s) avec succès !`)
+      const formData = new FormData()
+      copyFiles.forEach(file => formData.append('copies', file))
+
+      if (exam.epreuve?.cheminFichier) {
+        const epreuveResp = await fetch(exam.epreuve.cheminFichier)
+        const epreuveBlob = await epreuveResp.blob()
+        formData.append('epreuve', epreuveBlob, 'epreuve.pdf')
+      }
+      if (exam.corrige?.cheminFichier) {
+        const corrigeResp = await fetch(exam.corrige.cheminFichier)
+        const corrigeBlob = await corrigeResp.blob()
+        formData.append('corrige', corrigeBlob, 'corrige.pdf')
+      }
+
+      const response = await fetch(`${API_BASE_URL}/correct`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      clearInterval(progressInterval)
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || 'Erreur lors de la correction')
+      }
+
+      const results = await response.json()
+      setGradingProgress(100)
+      
+      const resultsWithTimestamp = {
+        ...results,
+        generatedAt: new Date().toISOString()
+      }
+      sessionStorage.setItem(`correction_${id}`, JSON.stringify(resultsWithTimestamp))
+      
+      await addNotification({
+        title: 'Correction terminée',
+        message: `L'examen "${exam.titre}" a été corrigé avec succès.`,
+        type: 'success',
+        link: `/dashboard/examens/${id}`
+      })
+
+      setHasStoredResults(true)
+      setViewMode('results')
+
+    } catch (error: any) {
+      console.error('Erreur correction:', error)
+      alert(error.message || 'Une erreur est survenue pendant la correction')
+    } finally {
+      setGrading(false)
+      setGradingProgress(0)
+    }
+  }
+
+  const handleFileUpload = async () => {
+    if (!files || !id) return
+    setUploading(true)
+    try {
+      await addStudentFiles(id, Array.from(files))
+      setFiles(null)
+      alert('Documents ajoutés avec succès')
     } catch (error) {
-      console.error('Erreur lors de l\'upload:', error)
-      alert('Erreur lors de l\'import des copies')
+      console.error(error)
+      alert('Erreur lors de l\'upload')
     } finally {
       setUploading(false)
-      setUploadProgress(0)
     }
   }
 
   const handleDelete = async () => {
+    if (!id) return
     setDeleting(true)
     try {
-      const success = await deleteExam(exam.id)
-      if (success) {
-        navigate('/dashboard/examens')
-      } else {
-        alert('Erreur lors de la suppression de l\'examen')
-      }
+      await deleteExam(id)
+      navigate('/dashboard/examens')
     } catch (error) {
-      console.error('Erreur:', error)
-      alert('Erreur lors de la suppression de l\'examen')
+      console.error(error)
+      alert('Erreur lors de la suppression')
     } finally {
       setDeleting(false)
-      setShowDeleteModal(false)
     }
   }
 
-  const downloadFile = async (url: string, filename: string) => {
+  const handleValidateChange = async () => {
+    if (!id || !exam) return
+    const newStatus = exam.statut === 'valide' ? 'termine' : 'valide'
     try {
-      const response = await fetch(url)
-      const blob = await response.blob()
-      const downloadUrl = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = downloadUrl
-      link.download = filename
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(downloadUrl)
+      await updateExamStatus(id, newStatus)
+      if (newStatus === 'valide') {
+        await addNotification({
+          title: 'Examen validé',
+          message: `L'examen "${exam.titre}" a été validé.`,
+          type: 'info'
+        })
+      }
     } catch (error) {
-      console.error('Erreur lors du téléchargement:', error)
-      alert('Erreur lors du téléchargement du fichier')
+      console.error(error)
     }
   }
 
-  const getStatutBadge = () => {
-    const badges = {
-      brouillon: { text: 'Brouillon', className: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400' },
-      publie: { text: 'Publié', className: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' },
-      termine: { text: 'Terminé', className: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' },
-      valide: { text: 'Validé', className: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' }
-    }
-    const badge = badges[exam.statut] || badges.brouillon
+  if (isLoading || !exam) {
     return (
-      <span className={`px-4 py-2 rounded-full text-sm font-google-bold ${badge.className}`}>
-        {badge.text}
-      </span>
+      <div className="flex items-center justify-center p-20">
+        <Loader2 className="animate-spin text-primary" size={40} />
+      </div>
     )
   }
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8 animate-in fade-in duration-500 pb-20">
       {/* Header Section */}
-      <section className="bg-surface border border-border-subtle rounded-3xl p-8 card-shadow shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 mb-8">
-          <div className="space-y-4">
-            <Link
-              to="/dashboard/examens"
-              className="inline-flex items-center gap-2 text-sm font-google-bold text-secondary hover:text-primary transition-colors group"
-            >
-              <ChevronLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
-              Retour aux examens
-            </Link>
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-3xl font-google-bold text-textcol">{exam.titre}</h1>
-                {getStatutBadge()}
+      <div className="flex flex-col gap-6">
+        <Link 
+          to="/dashboard/examens"
+          className="flex items-center gap-2 text-secondary hover:text-primary transition-colors w-fit border border-border-subtle px-3 py-1 rounded-lg"
+        >
+          <ChevronLeft size={20} />
+          Retour aux examens
+        </Link>
+
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 bg-surface p-8 rounded-[2rem] border border-border-subtle card-shadow">
+          <div className="flex gap-6 items-start">
+            <div className="p-4 bg-primary/5 text-primary rounded-[1.5rem] border border-primary/10">
+              <BookOpen size={36} />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <h1 className="text-3xl font-google-bold text-textcol capitalize">{exam.titre}</h1>
+                <span className={`px-3 py-1 rounded-full text-xs font-google-bold uppercase tracking-wider ${
+                  exam.statut === 'valide' 
+                    ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30' 
+                    : 'bg-amber-100 text-amber-600 dark:bg-amber-900/30'
+                }`}>
+                  {exam.statut === 'valide' ? 'Validé' : exam.statut}
+                </span>
               </div>
               <div className="flex flex-wrap items-center gap-6 text-sm text-secondary font-medium">
-                <span className="flex items-center gap-2">
-                  <BookOpen size={16} className="text-primary" />
-                  {exam.matiere}
-                </span>
                 {exam.classe && (
                   <span className="flex items-center gap-2">
                     <GraduationCap size={16} className="text-primary" />
@@ -482,16 +307,40 @@ const ExamDetail: React.FC = () => {
           <div className="flex items-center gap-3">
             {hasStoredResults && (
               <button
+                disabled={!permissions.can_export && exam.utilisateur_id !== user?.id}
                 onClick={() => navigate(`/dashboard/examens/${id}/resultats`)}
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-google-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/20"
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-google-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                title={!permissions.can_export ? "Vous n'avez pas la permission d'exporter" : ""}
               >
                 <FileCheck size={16} />
                 Voir les résultats
               </button>
             )}
+            
+            {!exam.team_id && exam.utilisateur_id === user?.id && (
+              <button 
+                onClick={() => setShowInviteModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-surface border border-border-subtle hover:bg-background rounded-xl text-sm font-google-bold transition-all"
+              >
+                <Share2 size={16} className="text-secondary" />
+                Partager
+              </button>
+            )}
+
+            {exam.utilisateur_id === user?.id && (
+              <button 
+                onClick={() => setShowSettingsModal(true)}
+                className="p-2 bg-surface border border-border-subtle hover:bg-background rounded-xl text-secondary transition-all"
+                title="Paramètres de l'examen"
+              >
+                <Settings size={20} />
+              </button>
+            )}
+
             <button
               onClick={() => setShowDeleteModal(true)}
-              className="flex items-center gap-2 px-4 py-2 text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/10 dark:hover:bg-red-900/20 rounded-xl text-sm font-google-bold transition-all"
+              disabled={exam.utilisateur_id !== user?.id}
+              className="flex items-center gap-2 px-4 py-2 text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/10 dark:hover:bg-red-900/20 rounded-xl text-sm font-google-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed"
             >
               <Trash2 size={16} />
               Supprimer
@@ -514,397 +363,427 @@ const ExamDetail: React.FC = () => {
             <button
               onClick={() => setViewMode('management')}
               className={`px-6 py-2 rounded-xl text-sm font-google-bold transition-all flex items-center gap-2 ${
-                viewMode === 'management' ? 'bg-primary text-white shadow-md' : 'text-secondary hover:text-textcol'
+                viewMode === 'management' ? 'bg-indigo-600 text-white shadow-md' : 'text-secondary hover:text-textcol'
               }`}
             >
               <Settings size={16} />
-              Gestion & Imports
+              Gestion & Files
             </button>
           </div>
         )}
-      </section>
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {(viewMode === 'results' && hasStoredResults) ? (
-          <div className="lg:col-span-3">
-             {/* Quick Results Summary Component (Inline) */}
-             <div className="bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-900/20 rounded-3xl p-10 text-center space-y-6">
-                <div className="mx-auto w-24 h-24 bg-white dark:bg-indigo-900/30 rounded-full flex items-center justify-center shadow-inner">
-                  <CheckCircle2 size={48} className="text-indigo-600" />
-                </div>
-                <div>
-                  <h3 className="text-2xl font-google-bold text-textcol">Examen déjà corrigé</h3>
-                  <p className="text-secondary max-w-md mx-auto mt-2">
-                    Tous les résultats sont disponibles. Vous pouvez les consulter, exporter les copies ou valider officiellement la session.
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center justify-center gap-4">
+      {(viewMode === 'results' && hasStoredResults) ? (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left Column - Results Summary */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="bg-surface border border-border-subtle rounded-[2.5rem] p-8 card-shadow shadow-sm">
+              <div className="flex items-center justify-between mb-8">
+                 <h2 className="text-2xl font-google-bold text-textcol">Résumé de la Correction</h2>
                   <button 
-                    onClick={() => navigate(`/dashboard/examens/${id}/resultats`)}
-                    className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-google-bold shadow-xl shadow-indigo-600/20 hover:scale-[1.02] transition-all flex items-center gap-2"
-                  >
-                    <LayoutDashboard size={20} />
-                    Accéder aux résultats complets
-                  </button>
-                  <button 
-                    onClick={() => setViewMode('management')}
-                    className="px-8 py-3 bg-white dark:bg-black/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-900/30 rounded-xl font-google-bold hover:bg-indigo-50 transition-all flex items-center gap-2"
-                  >
-                    <Settings size={20} />
-                    Retour au mode gestion
-                  </button>
-                </div>
-             </div>
-          </div>
-        ) : (
-          <>
-            {/* Left Column - Files Section */}
-        <div className="lg:col-span-1 space-y-6">
-          {/* Épreuve */}
-          <div className="bg-surface border border-border-subtle rounded-3xl p-6 card-shadow shadow-sm hover:shadow-md transition-all">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-3 bg-blue-50 dark:bg-blue-900/10 rounded-xl">
-                <FileText className="text-blue-600" size={20} />
+                    onClick={handleValidateChange}
+                    disabled={!permissions.can_validate && exam.utilisateur_id !== user?.id}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-google-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                      exam.statut === 'valide' 
+                        ? 'bg-green-100 text-green-600' 
+                        : 'bg-primary text-white shadow-lg shadow-primary/20'
+                    }`}
+                    title={!permissions.can_validate ? "Permission de validation manquante" : ""}
+                 >
+                   {exam.statut === 'valide' ? <CheckCircle2 size={16} /> : <FileCheck size={16} />}
+                   {exam.statut === 'valide' ? 'Validé' : 'Valider maintenant'}
+                 </button>
               </div>
-              <h3 className="text-lg font-google-bold text-textcol">Épreuve</h3>
+              
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {(() => {
+                  const saved = sessionStorage.getItem(`correction_${id}`)
+                  if (!saved) return null
+                  const summary = JSON.parse(saved).summary
+                  return (
+                    <>
+                      <div className="p-4 bg-background rounded-2xl border border-border-subtle">
+                        <p className="text-[10px] font-google-bold text-secondary uppercase tracking-wider mb-1">Copies</p>
+                        <p className="text-2xl font-google-bold text-textcol">{summary.total}</p>
+                      </div>
+                      <div className="p-4 bg-background rounded-2xl border border-border-subtle">
+                        <p className="text-[10px] font-google-bold text-secondary uppercase tracking-wider mb-1">Moyenne</p>
+                        <p className="text-2xl font-google-bold text-textcol">{summary.moyenne.toFixed(1)}/20</p>
+                      </div>
+                      <div className="p-4 bg-background rounded-2xl border border-border-subtle">
+                        <p className="text-[10px] font-google-bold text-secondary uppercase tracking-wider mb-1">Max</p>
+                        <p className="text-2xl font-google-bold text-textcol text-green-600">{summary.max.toFixed(1)}</p>
+                      </div>
+                      <div className="p-4 bg-background rounded-2xl border border-border-subtle">
+                        <p className="text-[10px] font-google-bold text-secondary uppercase tracking-wider mb-1">Réussite</p>
+                        <p className="text-2xl font-google-bold text-indigo-600">{Math.round(((summary.distribution.excellent + summary.distribution.bien + summary.distribution.pass) / summary.total) * 100)}%</p>
+                      </div>
+                    </>
+                  )
+                })()}
+              </div>
             </div>
-            {exam.epreuve ? (
-              <div className="space-y-4">
-                <div className="flex items-start gap-2 p-3 bg-background rounded-xl border border-border-subtle">
-                  <FileText className="text-secondary shrink-0 mt-0.5" size={14} />
-                  <p className="text-xs text-secondary font-medium truncate">{exam.epreuve.nomFichier}</p>
-                </div>
-                <button
-                  onClick={() => exam.epreuve?.cheminFichier && downloadFile(exam.epreuve.cheminFichier, exam.epreuve.nomFichier || 'epreuve.pdf')}
-                  className="w-full px-4 py-2.5 bg-primary text-white rounded-xl font-google-bold text-sm hover:brightness-110 transition-all flex items-center justify-center gap-2"
-                >
-                  <Download size={16} />
-                  Télécharger
-                </button>
-              </div>
-            ) : (
-              <div className="p-8 text-center bg-background rounded-2xl border border-dashed border-border-subtle">
-                <p className="text-xs text-secondary font-medium">Aucune épreuve</p>
-              </div>
-            )}
-          </div>
 
-          {/* Corrigé */}
-          <div className="bg-surface border border-border-subtle rounded-3xl p-6 card-shadow shadow-sm hover:shadow-md transition-all">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-3 bg-green-50 dark:bg-green-900/10 rounded-xl">
-                <CheckCircle2 className="text-green-600" size={20} />
+            <div className="bg-surface border border-border-subtle rounded-[2.5rem] p-8 card-shadow shadow-sm flex items-center justify-between">
+              <div className="flex items-center gap-6">
+                 <div className="p-4 bg-indigo-50 text-indigo-600 rounded-[1.5rem]">
+                   <FileText size={32} />
+                 </div>
+                 <div>
+                    <h3 className="text-xl font-google-bold text-textcol">Tableau des Résultats</h3>
+                    <p className="text-sm text-secondary">Accédez à l'analyse détaillée par étudiant et exportez les notes.</p>
+                 </div>
               </div>
-              <h3 className="text-lg font-google-bold text-textcol">Corrigé</h3>
-            </div>
-            {exam.corrige ? (
-              <div className="space-y-4">
-                <div className="flex items-start gap-2 p-3 bg-background rounded-xl border border-border-subtle">
-                  <FileCheck className="text-secondary shrink-0 mt-0.5" size={14} />
-                  <p className="text-xs text-secondary font-medium truncate">{exam.corrige.nomFichier}</p>
-                </div>
-                <button
-                  onClick={() => exam.corrige?.cheminFichier && downloadFile(exam.corrige.cheminFichier, exam.corrige.nomFichier || 'corrige.pdf')}
-                  className="w-full px-4 py-2.5 bg-primary text-white rounded-xl font-google-bold text-sm hover:brightness-110 transition-all flex items-center justify-center gap-2"
-                >
-                  <Download size={16} />
-                  Télécharger
-                </button>
-              </div>
-            ) : (
-              <div className="p-8 text-center bg-background rounded-2xl border border-dashed border-border-subtle">
-                <p className="text-xs text-secondary font-medium">Aucun corrigé</p>
-              </div>
-            )}
-          </div>
-
-          {/* Action Card */}
-          <div className="bg-indigo-600 rounded-3xl p-6 shadow-xl shadow-indigo-600/20 text-white relative overflow-hidden group">
-            <div className="relative z-10 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-google-bold">Analyse & IA</h3>
-                <Play size={20} className="text-white/40" />
-              </div>
-              <div className="space-y-2 pb-2">
-                <div className="flex justify-between text-sm text-indigo-100">
-                  <span>Copies importées</span>
-                  <span className="font-google-bold">{exam.copies.length}</span>
-                </div>
-                {exam.epreuve && (
-                  <div className="flex justify-between text-sm text-indigo-100">
-                    <span>Durée prévue</span>
-                    <span className="font-google-bold">{exam.epreuve.dureeMinutes} min</span>
-                  </div>
-                )}
-              </div>
-              <button
-                onClick={handleCorrection}
-                className="w-full py-3 bg-white text-indigo-600 rounded-xl font-google-bold text-sm hover:bg-indigo-50 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                disabled={grading || exam.copies.length === 0}
+              <Link 
+                to={`/dashboard/examens/${id}/resultats`}
+                className="px-6 py-3 bg-textcol text-surface rounded-xl text-sm font-google-bold hover:brightness-125 transition-all"
               >
-                {grading ? (
-                  <Loader2 className="animate-spin" size={18} />
-                ) : (
-                  <>
-                    <Play size={16} fill="currentColor" />
-                    Lancer la correction
-                  </>
-                )}
-              </button>
-              {(!exam.epreuve || !exam.corrige) && (
-                <div className="flex items-start gap-2 p-2 bg-white/10 rounded-lg">
-                  <AlertTriangle className="text-yellow-300 shrink-0" size={14} />
-                  <p className="text-[10px] text-white/80 leading-tight">Documents de référence manquants. La correction peut être moins précise.</p>
-                </div>
-              )}
+                Ouvrir les détails
+              </Link>
             </div>
-            <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
+          </div>
+
+          {/* Right Column - Sidebar style info */}
+          <div className="space-y-6">
+            <div className="bg-textcol text-surface rounded-[2.5rem] p-8 shadow-xl">
+               <h3 className="text-lg font-google-bold mb-6 flex items-center gap-2">
+                 <FileCheck size={20} className="text-indigo-400" />
+                 Points clés
+               </h3>
+               <div className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-2"></div>
+                    <p className="text-sm font-medium text-surface/80">Tous les étudiants ont été identifiés par l'IA.</p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-2"></div>
+                    <p className="text-sm font-medium text-surface/80">Le barème a été appliqué uniformément sur 20 points.</p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-2"></div>
+                    <p className="text-sm font-medium text-surface/80">Prêt pour l'exportation officielle.</p>
+                  </div>
+               </div>
+            </div>
           </div>
         </div>
-
-        {/* Right Column - Upload & Copies */}
-        <div className="lg:col-span-2 space-y-8">
-          {/* Upload Section */}
-          <section className="bg-surface border border-border-subtle rounded-3xl p-8 card-shadow shadow-sm transition-all">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-3 bg-primary/10 rounded-xl">
-                <UploadCloud className="text-primary" size={24} />
-              </div>
-              <div>
-                <h2 className="text-xl font-google-bold text-textcol">Importer des copies</h2>
-                <p className="text-sm text-secondary">Formats acceptés : PDF, PNG, JPG</p>
-              </div>
-            </div>
-            
-            <form onSubmit={handleUpload} className="space-y-6">
-              <div className="group relative border-2 border-dashed border-border-subtle rounded-2xl p-10 text-center hover:border-primary/50 transition-all hover:bg-primary/[0.02]">
-                <input
-                  type="file"
-                  id="student-files"
-                  accept="application/pdf,image/*"
-                  multiple
-                  onChange={(e) => setFiles(e.target.files)}
-                  className="hidden"
-                />
-                <label htmlFor="student-files" className="cursor-pointer block space-y-4">
-                  <div className="mx-auto w-16 h-16 bg-background rounded-2xl flex items-center justify-center card-shadow group-hover:scale-110 transition-transform">
-                    <FileText className="text-primary" size={32} />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left Column - Files Section */}
+          <div className="lg:col-span-2 space-y-8">
+            <div className="bg-surface border border-border-subtle rounded-[2.5rem] p-8 card-shadow shadow-sm">
+              <h2 className="text-2xl font-google-bold text-textcol mb-8">Documents de l'examen</h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Epreuve Card */}
+                <div className="group p-6 bg-background border border-border-subtle rounded-[2rem] hover:border-primary/30 transition-all flex flex-col justify-between min-h-[160px]">
+                  <div className="flex items-start justify-between">
+                    <div className="p-3 bg-primary/5 text-primary rounded-2xl group-hover:scale-110 transition-transform">
+                      <FileText size={24} />
+                    </div>
+                    {exam.epreuve?.cheminFichier && (
+                      <a href={exam.epreuve.cheminFichier} target="_blank" rel="noreferrer" className="p-2 text-secondary hover:text-textcol hover:bg-surface rounded-lg">
+                        <Download size={18} />
+                      </a>
+                    )}
                   </div>
                   <div>
-                    <p className="text-textcol font-google-bold">
-                      {files && files.length > 0 ? `${files.length} fichiers sélectionnés` : 'Glissez-déposez vos fichiers ici'}
-                    </p>
-                    <p className="text-sm text-secondary mt-1">
-                      ou cliquez pour parcourir vos dossiers
-                    </p>
-                  </div>
-                </label>
-              </div>
-
-              {files && files.length > 0 && (
-                <div className="bg-background border border-border-subtle rounded-2xl p-4 animate-in fade-in slide-in-from-top-2">
-                  <div className="flex items-center gap-2 text-sm font-google-bold text-textcol mb-3">
-                    <CheckCircle2 size={16} className="text-green-500" />
-                    Fichiers prêts pour l'import
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
-                    {Array.from(files).map((file, idx) => (
-                      <div key={idx} className="flex items-center gap-2 p-2 bg-surface border border-border-subtle rounded-lg text-[11px] font-medium text-secondary truncate">
-                        <FileText size={12} className="shrink-0" />
-                        {file.name}
-                      </div>
-                    ))}
+                    <h3 className="font-google-bold text-textcol">Épreuve</h3>
+                    <p className="text-xs text-secondary mt-1">{exam.epreuve?.cheminFichier ? 'Document disponible' : 'Non renseignée'}</p>
                   </div>
                 </div>
-              )}
 
-              {uploading && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-xs font-google-bold">
-                    <span className="text-secondary flex items-center gap-2">
-                      <Loader2 className="animate-spin text-primary" size={14} />
-                      Importation en cours...
-                    </span>
-                    <span className="text-primary">{Math.round(uploadProgress)}%</span>
-                  </div>
-                  <div className="w-full bg-background rounded-full h-1.5 overflow-hidden border border-border-subtle">
-                    <div
-                      className="bg-primary h-full transition-all duration-300 rounded-full"
-                      style={{ width: `${uploadProgress}%` }}
-                    ></div>
-                  </div>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={!files || files.length === 0 || uploading}
-                className="w-full px-6 py-3.5 bg-primary text-white rounded-xl font-google-bold hover:brightness-110 transition-all disabled:opacity-50 disabled:grayscale flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
-              >
-                {uploading ? (
-                  <Loader2 className="animate-spin" size={20} />
-                ) : (
-                  <>
-                    <UploadCloud size={20} />
-                    Démarrer l'importation
-                  </>
-                )}
-              </button>
-            </form>
-          </section>
-
-          {/* Copies List */}
-          <section className="bg-surface border border-border-subtle rounded-3xl p-8 card-shadow shadow-sm">
-            <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-secondary/10 rounded-xl">
-                  <LayoutDashboard className="text-secondary" size={24} />
-                </div>
-                <div>
-                  <h2 className="text-xl font-google-bold text-textcol">Copies importées</h2>
-                  <p className="text-sm text-secondary">{exam.copies.length} document{exam.copies.length > 1 ? 's' : ''} au total</p>
-                </div>
-              </div>
-            </div>
-
-            {exam.copies.length === 0 ? (
-              <div className="text-center py-16 bg-background rounded-3xl border border-dashed border-border-subtle">
-                <div className="mx-auto w-16 h-16 bg-surface rounded-2xl flex items-center justify-center mb-4 card-shadow">
-                  <FileText className="text-border-subtle" size={32} />
-                </div>
-                <p className="text-textcol font-google-bold">Liste vide</p>
-                <p className="text-sm text-secondary mt-1">Aucune copie n'a été importée pour cet examen.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-3">
-                {exam.copies.map((copie) => (
-                  <div
-                    key={copie.id}
-                    className="group flex items-center justify-between p-4 bg-background border border-border-subtle rounded-2xl hover:border-primary/30 hover:shadow-md transition-all"
-                  >
-                    <div className="flex items-center gap-4 min-w-0">
-                      <div className="p-2.5 bg-surface rounded-xl border border-border-subtle group-hover:bg-primary/5 group-hover:border-primary/20 transition-colors">
-                        <FileText className="text-secondary group-hover:text-primary transition-colors" size={18} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-google-bold text-textcol truncate text-sm">{copie.name}</p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <Clock size={12} className="text-secondary/50" />
-                          <p className="text-[11px] font-medium text-secondary/60">
-                            {new Date(copie.uploadedAt).toLocaleString('fr-FR', {
-                              day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
-                            })}
-                          </p>
-                        </div>
-                      </div>
+                {/* Corrige Card */}
+                <div className="group p-6 bg-background border border-border-subtle rounded-[2rem] hover:border-amber-300 transition-all flex flex-col justify-between min-h-[160px]">
+                  <div className="flex items-start justify-between">
+                    <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl group-hover:scale-110 transition-transform">
+                      <FileCheck size={24} />
                     </div>
-                    <div className="flex items-center gap-2 transform translate-x-2 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all">
-                      <button
-                        onClick={() => copie.url && downloadFile(copie.url, copie.name)}
-                        className="p-2 text-secondary hover:text-primary hover:bg-primary/5 rounded-lg transition-all"
-                        title="Télécharger"
-                      >
+                    {exam.corrige?.cheminFichier && (
+                      <a href={exam.corrige.cheminFichier} target="_blank" rel="noreferrer" className="p-2 text-secondary hover:text-textcol hover:bg-surface rounded-lg">
                         <Download size={18} />
-                      </button>
-                      <button className="p-2 text-secondary hover:text-red-600 hover:bg-red-50 rounded-lg transition-all">
-                        <X size={18} />
-                      </button>
-                    </div>
+                      </a>
+                    )}
                   </div>
-                ))}
+                  <div>
+                    <h3 className="font-google-bold text-textcol">Corrigé type</h3>
+                    <p className="text-xs text-secondary mt-1">{exam.corrige?.cheminFichier ? 'Document disponible' : 'Non renseigné'}</p>
+                  </div>
+                </div>
               </div>
-            )}
-          </section>
-        </div>
-      </>
-    )}
-  </div>
 
-      {/* Grading Modal */}
-      {grading && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-6 animate-in fade-in duration-300">
-          <div className="bg-surface rounded-[2rem] p-10 max-w-md w-full shadow-2xl border border-border-subtle text-center space-y-8">
-            <div className="relative mx-auto w-24 h-24">
-              <div className="absolute inset-0 bg-indigo-600/20 rounded-full animate-ping"></div>
-              <div className="relative bg-indigo-600 rounded-[1.5rem] w-full h-full flex items-center justify-center shadow-xl shadow-indigo-600/30">
-                <Loader2 className="text-white animate-spin" size={40} />
-              </div>
-            </div>
-            
-            <div className="space-y-3">
-              <h3 className="text-2xl font-google-bold text-textcol">Correction intelligente</h3>
-              <p className="text-sm text-secondary px-4 leading-relaxed">
-                {gradingProgress < 30 ? 'Initialisation de l\'analyse...' : 
-                 gradingProgress < 60 ? 'Extraction des textes manuscrits...' : 
-                 gradingProgress < 90 ? 'Évaluation par l\'intelligence artificielle...' : 
-                 'Finalisation des résultats...'}
-              </p>
-            </div>
-
-            <div className="space-y-4 pt-4">
-              <div className="flex items-center justify-between text-sm font-google-bold">
-                <span className="text-secondary">Progression globale</span>
-                <span className="text-indigo-600">{Math.round(gradingProgress)}%</span>
-              </div>
-              <div className="w-full bg-background rounded-full h-2 overflow-hidden border border-border-subtle p-0.5">
-                <div
-                  className="bg-indigo-600 h-full transition-all duration-700 rounded-full shadow-sm"
-                  style={{ width: `${gradingProgress}%` }}
-                ></div>
+              {/* Action Correction */}
+              <div className="mt-8 pt-8 border-t border-border-subtle">
+                <button 
+                  onClick={handleCorrection}
+                  disabled={grading || (!permissions.can_correct && exam.utilisateur_id !== user?.id)}
+                  className="w-full relative group overflow-hidden bg-primary text-white rounded-[1.5rem] p-4 font-google-bold hover:brightness-110 transition-all flex items-center justify-center gap-3 shadow-xl shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={!permissions.can_correct ? "Permission de correction manquante" : ""}
+                >
+                  {grading ? (
+                    <>
+                      <Loader2 className="animate-spin" size={20} />
+                      <span>Correction par IA en cours ({gradingProgress}%)</span>
+                      <div className="absolute bottom-0 left-0 h-1 bg-white/30 transition-all duration-300" style={{ width: `${gradingProgress}%` }}></div>
+                    </>
+                  ) : (
+                    <>
+                      <Play size={20} />
+                      <span>Lancer la correction intelligente</span>
+                    </>
+                  )}
+                </button>
               </div>
             </div>
 
-            <div className="pt-4">
-              <p className="text-[10px] text-secondary/50 font-medium bg-background border border-border-subtle py-2 rounded-xl">
-                Veuillez ne pas fermer cette fenêtre pendant le processus.
-              </p>
+            {/* Copies Section */}
+            <div className="bg-surface border border-border-subtle rounded-[2.5rem] p-8 card-shadow shadow-sm">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                <h2 className="text-2xl font-google-bold text-textcol">Copies des étudiants</h2>
+                {exam.copies.length > 0 && (
+                  <span className="px-4 py-1.5 bg-background border border-border-subtle rounded-xl text-xs font-google-bold text-secondary">
+                    {exam.copies.length} copies importées
+                  </span>
+                )}
+              </div>
+
+              {exam.copies.length === 0 ? (
+                <div className="bg-background/50 border-2 border-dashed border-border-subtle rounded-[2rem] p-12 text-center group hover:border-primary/30 transition-all">
+                  <div className="p-4 bg-surface rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                    <UploadCloud size={32} className="text-secondary/40 group-hover:text-primary/40" />
+                  </div>
+                  <h3 className="text-lg font-google-bold text-textcol">Ajoutez les copies</h3>
+                  <p className="text-secondary max-w-xs mx-auto mt-2 text-sm leading-relaxed">Glissez-déposez les scans des copies de vos étudiants pour lancer l'analyse.</p>
+                  <label className="mt-6 inline-flex cursor-pointer px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-google-bold hover:brightness-110 transition-all shadow-lg shadow-primary/20">
+                    Parcourir les fichiers
+                    <input type="file" multiple className="hidden" onChange={(e) => setFiles(e.target.files)} />
+                  </label>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                      {exam.copies.map((copie: any, idx: number) => (
+                        <div key={idx} className="group p-3 bg-background border border-border-subtle rounded-2xl hover:border-primary/30 transition-all">
+                           <div className="aspect-[3/4] bg-surface rounded-xl flex items-center justify-center mb-3 relative overflow-hidden">
+                              <FileText size={32} className="text-secondary/20" />
+                              <div className="absolute inset-0 bg-primary/0 group-hover:bg-primary/5 transition-colors"></div>
+                              <a 
+                                href={copie.url} 
+                                target="_blank" 
+                                rel="noreferrer"
+                                className="absolute bottom-2 right-2 p-2 bg-surface rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:text-primary shadow-sm"
+                              >
+                                <Download size={14} />
+                              </a>
+                           </div>
+                           <p className="text-[10px] font-google-bold text-textcol truncate">{copie.name}</p>
+                           <p className="text-[9px] text-secondary font-medium flex items-center gap-1 mt-1">
+                             <Clock size={10} />
+                             {new Date().toLocaleDateString()}
+                           </p>
+                        </div>
+                      ))}
+                      
+                      <label className={`aspect-[3/4] border-2 border-dashed border-border-subtle rounded-2xl flex flex-col items-center justify-center gap-2 transition-all bg-background/30 ${
+                        permissions.can_add_copies || exam.utilisateur_id === user?.id 
+                        ? 'hover:border-primary/30 cursor-pointer hover:bg-primary/5' 
+                        : 'opacity-50 cursor-not-allowed'
+                      }`}>
+                        <UploadCloud size={24} className="text-secondary/40" />
+                        <span className="text-[10px] font-google-bold text-secondary">Ajouter</span>
+                        {(permissions.can_add_copies || exam.utilisateur_id === user?.id) && (
+                          <input type="file" multiple className="hidden" onChange={(e) => setFiles(e.target.files)} />
+                        )}
+                        {!(permissions.can_add_copies || exam.utilisateur_id === user?.id) && (
+                          <span className="text-[8px] text-red-500 font-bold px-2 text-center">Permission requise</span>
+                        )}
+                      </label>
+                   </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Column - Status & Progress */}
+          <div className="space-y-8">
+            <div className="bg-textcol text-surface rounded-[2.5rem] p-8 shadow-xl">
+               <h3 className="text-lg font-google-bold mb-6 flex items-center gap-2">
+                 <LayoutDashboard size={20} className="text-indigo-400" />
+                 Espace Correction
+               </h3>
+               
+               <div className="space-y-6">
+                 <div className="bg-surface/10 rounded-2xl p-4 border border-surface/5">
+                    <p className="text-xs font-medium text-surface/60 uppercase tracking-widest mb-3">Statut actuel</p>
+                    <div className="flex items-center gap-3">
+                       <div className={`w-3 h-3 rounded-full animate-pulse ${exam.statut === 'valide' ? 'bg-green-400' : 'bg-amber-400'}`}></div>
+                       <span className="text-lg font-google-bold capitalize">{exam.statut === 'valide' ? 'Prêt pour export' : 'En attente'}</span>
+                    </div>
+                 </div>
+
+                 <div className="space-y-4">
+                    <div className="flex items-center justify-between text-xs font-google-bold">
+                       <span className="text-surface/70 flex items-center gap-2">
+                         <FileText size={14} className="text-indigo-400" />
+                         Documents
+                       </span>
+                       <span className="text-surface">{[exam.epreuve?.cheminFichier, exam.corrige?.cheminFichier].filter(Boolean).length}/2</span>
+                    </div>
+                    <div className="h-1.5 bg-surface/10 rounded-full overflow-hidden">
+                       <div 
+                        className="h-full bg-indigo-400 transition-all duration-500" 
+                        style={{ width: `${([exam.epreuve?.cheminFichier, exam.corrige?.cheminFichier].filter(Boolean).length / 2) * 100}%` }}
+                       ></div>
+                    </div>
+                 </div>
+               </div>
+
+               <div className="mt-8 pt-8 border-t border-surface/10">
+                  <Link 
+                    to="/dashboard/examens"
+                    className="flex items-center justify-center gap-2 py-3 bg-indigo-600 rounded-xl text-sm font-google-bold hover:brightness-125 transition-all shadow-lg shadow-indigo-600/20"
+                  >
+                    Tableau de bord
+                  </Link>
+               </div>
+            </div>
+
+            {/* Info Message */}
+            <div className="bg-surface border border-border-subtle rounded-[2.5rem] p-8 card-shadow shadow-sm">
+               <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl w-fit mb-4">
+                  <AlertTriangle size={24} />
+               </div>
+               <h3 className="text-lg font-google-bold text-textcol mb-2">Note Importante</h3>
+               <p className="text-sm text-secondary leading-relaxed">
+                 Assurez-vous que tous les scans sont de bonne qualité (300dpi minimum) pour une interprétation optimale par l'intelligence artificielle.
+               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Delete Modal */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-6 animate-in fade-in transition-all">
-          <div className="bg-surface rounded-[2rem] p-10 max-w-md w-full shadow-2xl border border-border-subtle space-y-8">
-            <div className="flex flex-col items-center text-center space-y-4">
-              <div className="w-20 h-20 bg-red-50 dark:bg-red-900/10 rounded-full flex items-center justify-center">
-                <AlertTriangle className="text-red-600" size={40} />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-2xl font-google-bold text-textcol">Supprimer l'examen</h3>
-                <p className="text-sm text-secondary leading-relaxed">
-                  Êtes-vous sûr de vouloir supprimer <span className="text-textcol font-google-bold">"{exam.titre}"</span> ?
-                  Cette action est définitive et supprimera toutes les données associées.
-                </p>
-              </div>
+      {/* Upload Progress Modal Overlay */}
+      {uploading && (
+        <div className="fixed inset-0 z-[100] bg-textcol/20 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface border border-border-subtle rounded-3xl p-8 w-full max-w-sm card-shadow text-center">
+            <Loader2 className="animate-spin h-10 w-10 text-primary mx-auto mb-4" />
+            <h3 className="text-xl font-google-bold text-textcol mb-2">Importation en cours</h3>
+            <p className="text-sm text-secondary mb-6">Veuillez patienter pendant l'upload des fichiers.</p>
+            <div className="w-full h-2 bg-background rounded-full overflow-hidden">
+              <div className="h-full bg-primary animate-progress"></div>
             </div>
+          </div>
+        </div>
+      )}
 
-            <div className="flex flex-col sm:flex-row gap-3 pt-4">
-              <button
+      {/* Selection Confirmation Modal (Triggered by files selection) */}
+      {files && !uploading && (
+        <div className="fixed inset-0 z-[100] bg-textcol/20 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface border border-border-subtle rounded-3xl p-8 w-full max-w-md card-shadow">
+            <h3 className="text-xl font-google-bold text-textcol mb-2">Confirmer l'importation</h3>
+            <p className="text-sm text-secondary mb-6">Vous avez sélectionné <span className="text-textcol font-google-bold">{files.length}</span> copies à ajouter à cet examen.</p>
+            <div className="flex gap-4">
+               <button 
+                onClick={() => setFiles(null)}
+                className="flex-1 px-4 py-3 bg-background border border-border-subtle rounded-xl text-sm font-google-bold text-textcol hover:bg-surface transition-all"
+               >
+                 Annuler
+               </button>
+               <button 
+                onClick={handleFileUpload}
+                className="flex-1 px-4 py-3 bg-primary text-white rounded-xl text-sm font-google-bold hover:brightness-110 transition-all shadow-lg shadow-primary/20"
+               >
+                 Importer
+               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-[100] bg-textcol/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface border border-border-subtle rounded-3xl p-8 w-full max-w-md card-shadow animate-in zoom-in-95 duration-200">
+            <div className="p-4 bg-red-50 text-red-600 rounded-2xl w-fit mb-6">
+              <AlertTriangle size={32} />
+            </div>
+            <h2 className="text-2xl font-google-bold text-textcol mb-2">Supprimer l'examen ?</h2>
+            <p className="text-secondary mb-8 leading-relaxed">Cette action est irréversible. Toutes les copies et les résultats associés seront définitivement effacés.</p>
+            <div className="flex gap-4">
+              <button 
                 onClick={() => setShowDeleteModal(false)}
-                disabled={deleting}
-                className="flex-1 px-6 py-3.5 bg-background border border-border-subtle text-textcol rounded-xl font-google-bold hover:bg-gray-50 transition-all disabled:opacity-50"
+                className="flex-1 px-6 py-3 bg-background border border-border-subtle rounded-xl text-sm font-google-bold text-textcol hover:bg-surface transition-all"
               >
                 Annuler
               </button>
-              <button
+              <button 
                 onClick={handleDelete}
                 disabled={deleting}
-                className="flex-1 px-6 py-3.5 bg-red-600 text-white rounded-xl font-google-bold hover:bg-red-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-red-600/20"
+                className="flex-1 px-6 py-3 bg-red-600 text-white rounded-xl text-sm font-google-bold hover:bg-red-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                {deleting ? (
-                  <Loader2 className="animate-spin" size={20} />
-                ) : (
-                  <>
-                    <Trash2 size={20} />
-                    Confirmer
-                  </>
-                )}
+                {deleting ? <Loader2 className="animate-spin" size={18} /> : 'Supprimer'}
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {showSettingsModal && exam && (
+        <div className="fixed inset-0 z-[100] bg-textcol/20 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-surface border border-border-subtle rounded-3xl p-8 w-full max-w-md shadow-2xl relative">
+            <button
+               onClick={() => setShowSettingsModal(false)}
+               className="absolute top-6 right-6 p-2 text-secondary hover:bg-background rounded-full transition-colors"
+            >
+               <X size={20} />
+            </button>
+
+            <h2 className="text-2xl font-google-bold text-textcol mb-2">Paramètres de partage</h2>
+            <p className="text-sm text-secondary mb-8">Gérez l'équipe associée à cet examen. Seul le propriétaire peut modifier ce réglage.</p>
+
+            <div className="space-y-6">
+              <div>
+                 <label className="block text-sm font-google-bold text-textcol mb-3">Équipe associée</label>
+                 <select 
+                   value={exam.team_id || ''}
+                   onChange={async (e) => {
+                     const teamId = e.target.value || null
+                     if (window.confirm("Voulez-vous vraiment changer l'équipe de cet examen ?")) {
+                       const success = await changeExamTeam(exam.id, teamId)
+                       if (success) {
+                         alert("L'équipe a été mise à jour.")
+                         setShowSettingsModal(false)
+                       } else {
+                         alert("Erreur lors de la mise à jour.")
+                       }
+                     }
+                   }}
+                   className="w-full px-4 py-3 rounded-xl border border-border-subtle bg-background outline-none transition-all"
+                 >
+                   <option value="">Aucune équipe (Privé)</option>
+                   {teams.map(t => (
+                     <option key={t.id} value={t.id}>{t.nom}</option>
+                   ))}
+                 </select>
+              </div>
+
+              <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-start gap-3">
+                 <Settings size={18} className="text-indigo-600 mt-1 shrink-0" />
+                 <p className="text-[11px] text-indigo-700 leading-relaxed font-medium">
+                   Lier un examen à une équipe permet à tous les membres de cette équipe d'y accéder selon leurs permissions respectives.
+                 </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showInviteModal && exam && (
+        <InviteModal 
+          examId={exam.id}
+          examTitle={exam.titre}
+          onClose={() => setShowInviteModal(false)}
+        />
       )}
     </div>
   )

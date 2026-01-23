@@ -40,6 +40,9 @@ export type Exam = {
   copies: StudentFile[]
   createdAt?: string
   updatedAt?: string
+  team_id?: string
+  team_nom?: string
+  utilisateur_id: string
 }
 
 type CreateExamPayload = {
@@ -99,9 +102,11 @@ export const ExamsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         .select(`
           *,
           epreuves (*),
-          copies (*)
+          copies (*),
+          equipe_examens (
+            equipes (id, nom)
+          )
         `)
-        .eq('utilisateur_id', user.id)
         .order('created_at', { ascending: false })
 
       if (examensError) throw examensError
@@ -156,7 +161,10 @@ export const ExamsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               etudiantId: copie.etudiant_id
             })),
             createdAt: examen.created_at,
-            updatedAt: examen.updated_at
+            updatedAt: examen.updated_at,
+            team_id: examen.equipe_examens?.[0]?.equipes?.id,
+            team_nom: examen.equipe_examens?.[0]?.equipes?.nom,
+            utilisateur_id: examen.utilisateur_id
           }
         })
       )
@@ -316,7 +324,8 @@ export const ExamsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         epreuve,
         corrige,
         copies: [],
-        createdAt: examenData.created_at
+        createdAt: examenData.created_at,
+        utilisateur_id: user.id
       }
 
       setExams((prev) => [newExam, ...prev])

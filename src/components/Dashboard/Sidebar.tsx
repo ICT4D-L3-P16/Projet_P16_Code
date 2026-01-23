@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, FileText, BarChart3, Bell, LifeBuoy, Settings, ChevronLeft, LogOut } from 'lucide-react'
+import { LayoutDashboard, FileText, BarChart3, Bell, LifeBuoy, Settings, ChevronLeft, LogOut, Users } from 'lucide-react'
 import sajeLogo from '../../assets/images/logo/saje_mini.png'
 import { useAuth } from '../../context/AuthContext'
 import { useNotifications } from '../../notifications'
@@ -17,6 +17,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, setIsCollapsed })
     const menuItems = [
         { name: 'Tableau de bord', path: '/dashboard', icon: <LayoutDashboard size={20} /> },
         { name: 'Mes Examens', path: '/dashboard/examens', icon: <FileText size={20} /> },
+        { name: 'Équipes', path: '/dashboard/equipes', icon: <Users size={20} /> },
         { name: 'Analytiques', path: '/dashboard/statistiques', icon: <BarChart3 size={20} /> },
         { name: 'Notifications', path: '/dashboard/notifications', icon: <Bell size={20} />, badge: unreadCount },
         { name: 'Assistance', path: '/dashboard/support', icon: <LifeBuoy size={20} /> },

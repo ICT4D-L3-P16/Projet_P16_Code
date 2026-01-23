@@ -100,9 +100,9 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
         .from('notification_preferences')
         .select('*')
         .eq('user_id', user.id)
-        .single()
+        .maybeSingle() // Use maybeSingle to avoid 406/single row errors
 
-      if (error && error.code !== 'PGRST116') throw error
+      if (error) throw error
 
       if (data) {
         setPreferences({
@@ -111,7 +111,7 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
         })
       }
     } catch (err) {
-      console.error('Error loading preferences:', err)
+      console.error('Error loading preferences (non-blocking):', err)
     }
   }
 
