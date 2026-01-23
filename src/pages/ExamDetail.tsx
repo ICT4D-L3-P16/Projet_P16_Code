@@ -165,7 +165,7 @@ const ExamDetail: React.FC = () => {
         formData.append('corrige', corrigeBlob, 'corrige.pdf')
       }
 
-      const response = await fetch(`${API_BASE_URL}/correct`, {
+      const response = await fetch(`${API_BASE_URL}/api/correct`, {
         method: 'POST',
         body: formData,
       })
