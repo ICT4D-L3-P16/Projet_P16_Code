@@ -38,14 +38,64 @@ export async function submitLocalFiles(files: FileList | File[]) {
 }
 
 export async function getResults() {
-  const res = await fetch(`${API_BASE}/results`)
+  const res = await fetch(`${API_BASE}/api/results`)
   if (!res.ok) throw new Error('Failed to load results')
   return res.json()
+}
+
+export const transformResults = (backendRes: any, examCopies: any[], exam: any) => {
+  const rawResultats = backendRes.resultat || {}
+  const transformCopy = (key: string, data: any) => {
+    const copyIndex = parseInt(key.replace('copie_', '')) - 1
+    const originalFile = examCopies[copyIndex]
+    const maxNote = exam?.corrige?.totalPoints || 20
+    
+    return {
+      id: data.db_id || key,
+      nomEleve: originalFile?.name || data.nom_fichier || key,
+      note: Number(data.note_totale) || 0,
+      maxNote: maxNote,
+      pourcent: Math.round(((Number(data.note_totale) || 0) / maxNote) * 100),
+      details: (data.questions || []).map((q: any) => {
+        const maxPoints = Number(q.max_points) || (maxNote / (data.questions.length || 1)) || 5
+        return {
+          question: q.num,
+          points: q.point,
+          maxPoints: Math.round(maxPoints),
+          type: q.type || 'open',
+          reponse: 'Extraite par OCR',
+          status: q.point > 0 ? (q.point >= (maxPoints * 0.8) ? 'full' : 'partial') : 'none',
+          comment: q.commentaire
+        }
+      })
+    }
+  }
+
+  const transformedCopies = Object.entries(rawResultats).map(([key, data]) => transformCopy(key, data))
+  const notes = transformedCopies.map(c => c.note)
+  const moyenne = notes.length > 0 ? (notes.reduce((a, b) => a + b, 0) / notes.length) : 0
+
+  return {
+    ...backendRes,
+    copies: transformedCopies,
+    summary: {
+      total: examCopies.length,
+      graded: transformedCopies.length,
+      moyenne: moyenne,
+      max: notes.length > 0 ? Math.max(...notes) : 0,
+      distribution: {
+        excellent: notes.filter(n => n >= 16).length,
+        bien: notes.filter(n => n >= 12 && n < 16).length,
+        pass: notes.filter(n => n >= 10 && n < 12).length
+      }
+    }
+  }
 }
 
 export default {
   submitFormData,
   submitRemoteUrls,
   submitLocalFiles,
-  getResults
+  getResults,
+  transformResults
 }

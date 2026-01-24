@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import { useLocation, useParams, useNavigate } from 'react-router-dom'
 import { useExams } from '../exams'
 import { useNotifications } from '../notifications'
 import { CheckCircle, FileText, FileJson, ChevronDown, ChevronUp, Settings } from 'lucide-react'
+import { transformResults } from '../lib/correctionApi'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
@@ -15,7 +16,68 @@ const CorrectionResults: React.FC = () => {
   const exam = exams.find((e) => e.id === id)
   const [isValidating, setIsValidating] = useState(false)
 
-  // Try location state first, then fallback to sessionStorage
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [history, setHistory] = useState<any[]>([])
+  const [loadingHistory, setLoadingHistory] = useState(false)
+  const [remoteResults, setRemoteResults] = useState<any>(null)
+  const [loadingResults, setLoadingResults] = useState(false)
+
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'
+
+  // Fetch results and history
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!id) return
+      setLoadingHistory(true)
+      setLoadingResults(true)
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/results`)
+        if (response.ok) {
+          const allData = await response.json()
+          
+          // Set history
+          setHistory(allData)
+
+          if (!location.state && !sessionStorage.getItem(`correction_${id}`)) {
+            if (exam && exam.copies.length > 0) {
+              const examFileNames = exam.copies.map((c: any) => c.name)
+              const relevantResults = allData.filter((r: any) => 
+                examFileNames.includes(r.transcriptions?.nom_fichier)
+              )
+
+              if (relevantResults.length > 0) {
+                const resultsData: any = { resultat: {} }
+                relevantResults.forEach((r: any, idx: number) => {
+                  const key = `copie_${idx + 1}`
+                  resultsData.resultat[key] = {
+                    ...r.details_json,
+                    db_id: r.id,
+                    nom_fichier: r.transcriptions?.nom_fichier
+                  }
+                })
+                
+                const finalResults = transformResults(resultsData, exam.copies, exam)
+                finalResults.generatedAt = relevantResults[0].transcriptions?.created_at || new Date().toISOString()
+                
+                // Store transformed results so results useMemo can pick them up
+                setRemoteResults(finalResults)
+                sessionStorage.setItem(`correction_${id}`, JSON.stringify(finalResults))
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching results history:", err)
+      } finally {
+        setLoadingHistory(false)
+        setLoadingResults(false)
+      }
+    }
+
+    fetchData()
+  }, [id, API_BASE_URL, exam])
+
+  // Try location state, then fallback to sessionStorage
   const results = useMemo(() => {
     if (location.state && (location.state as any).results) return (location.state as any).results
     if (id) {
@@ -28,8 +90,6 @@ const CorrectionResults: React.FC = () => {
     }
     return null
   }, [location.state, id])
-
-  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   if (!results) {
     return (
@@ -152,8 +212,6 @@ const CorrectionResults: React.FC = () => {
     }
   }
 
-  // History fetching disabled
-  const history: any[] = []
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -320,13 +378,28 @@ const CorrectionResults: React.FC = () => {
             {history ? (
               history.length === 0 ? <div className="text-textcol/70">Aucun résultat enregistré</div> : (
                 history.map((h: any) => (
-                  <div key={h.id} className="p-3 border rounded-lg bg-background flex items-center justify-between">
+                  <div key={h.id} className="p-3 border rounded-lg bg-background flex items-center justify-between group hover:border-primary/50 transition-all">
                     <div>
-                      <div className="font-google-bold">{h.transcriptions?.nom_fichier || `id:${h.id}`}</div>
-                      <div className="text-sm text-textcol/70">Note: <span className="font-google-bold">{h.note_totale}</span> • <span className="text-xs text-textcol/50">{new Date(h.transcriptions?.created_at || h.created_at || '').toLocaleString()}</span></div>
+                      <div className="font-google-bold flex items-center gap-2">
+                        {h.transcriptions?.nom_fichier || `id:${h.id}`}
+                        <span className="text-[10px] px-2 py-0.5 bg-gray-100 rounded text-gray-500 uppercase font-bold">
+                          {h.transcriptions?.statut || 'Terminé'}
+                        </span>
+                      </div>
+                      <div className="text-sm text-textcol/70">
+                        Note: <span className="font-google-bold text-primary">{h.note_totale}/20</span> • 
+                        <span className="text-xs text-textcol/50 ml-2">
+                          {new Date(h.transcriptions?.created_at || h.created_at || '').toLocaleString('fr-FR')}
+                        </span>
+                      </div>
                     </div>
                     <div>
-                      <button onClick={() => navigator.clipboard.writeText(JSON.stringify(h.details || h.details_json || h))} className="px-3 py-2 bg-primary text-white rounded-lg">Copier JSON</button>
+                      <button 
+                        onClick={() => navigator.clipboard.writeText(JSON.stringify(h.details_json || h))} 
+                        className="px-3 py-1.5 bg-background border border-border-subtle hover:bg-surface rounded-lg text-xs font-bold transition-all"
+                      >
+                        Copier JSON
+                      </button>
                     </div>
                   </div>
                 ))

@@ -26,6 +26,7 @@ import {
   Share2
 } from 'lucide-react'
 import { InviteModal } from '../components/Dashboard/InviteModal'
+import { transformResults } from '../lib/correctionApi'
 
 const ExamDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>()
@@ -110,6 +111,48 @@ const ExamDetail: React.FC = () => {
     fetchPermissions()
   }, [exam, user, getTeamMembers])
 
+
+  useEffect(() => {
+    const fetchExistingResults = async () => {
+      if (!id || !exam || exam.copies.length === 0 || hasStoredResults) return
+      
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/results`)
+        if (response.ok) {
+          const allResults = await response.json()
+          const examFileNames = exam.copies.map((c: any) => c.name)
+          const relevantResults = allResults.filter((r: any) => 
+            examFileNames.includes(r.transcriptions?.nom_fichier)
+          )
+
+          if (relevantResults.length > 0) {
+            const resultsData: any = { resultat: {} }
+            relevantResults.forEach((r: any, idx: number) => {
+              const key = `copie_${idx + 1}`
+              resultsData.resultat[key] = {
+                ...r.details_json,
+                db_id: r.id,
+                nom_fichier: r.transcriptions?.nom_fichier
+              }
+            })
+            
+            const finalResults = transformResults(resultsData, exam.copies, exam)
+            // Use original creation date if available
+            finalResults.generatedAt = relevantResults[0].transcriptions?.created_at || new Date().toISOString()
+            
+            sessionStorage.setItem(`correction_${id}`, JSON.stringify(finalResults))
+            setHasStoredResults(true)
+          }
+        }
+      } catch (error) {
+        console.error("Erreur lors de la récupération des résultats existants:", error)
+      }
+    }
+
+    fetchExistingResults()
+  }, [exam, id, hasStoredResults])
+
   const handleCorrection = async () => {
     if (grading) return
     if (!exam) return
@@ -138,6 +181,12 @@ const ExamDetail: React.FC = () => {
       
       for (const copie of exam.copies) {
         if (copie.url) {
+          if (copie.name.toLowerCase().endsWith('.pdf')) {
+            alert(`Attention: Le fichier ${copie.name} est un PDF. Le backend OCR ne supporte actuellement que les images (JPG, PNG).`)
+            setGrading(false)
+            setGradingProgress(0)
+            return
+          }
           try {
             const response = await fetch(copie.url)
             const blob = await response.blob()
@@ -152,8 +201,10 @@ const ExamDetail: React.FC = () => {
       if (copyFiles.length === 0) throw new Error('Impossible de charger les fichiers des copies')
 
       const formData = new FormData()
-      copyFiles.forEach(file => formData.append('copies', file))
+      copyFiles.forEach(file => formData.append('files', file))
 
+      // Note: The backend currently ignores these extra fields in /api/full, 
+      // but we keep them for future compatibility if the backend is updated.
       if (exam.epreuve?.cheminFichier) {
         const epreuveResp = await fetch(exam.epreuve.cheminFichier)
         const epreuveBlob = await epreuveResp.blob()
@@ -165,7 +216,8 @@ const ExamDetail: React.FC = () => {
         formData.append('corrige', corrigeBlob, 'corrige.pdf')
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/correct`, {
+      // Updated endpoint to /api/full as per backend README for complete pipeline
+      const response = await fetch(`${API_BASE_URL}/api/full`, {
         method: 'POST',
         body: formData,
       })
@@ -174,17 +226,16 @@ const ExamDetail: React.FC = () => {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail || 'Erreur lors de la correction')
+        throw new Error(errorData.error || errorData.detail || 'Erreur lors de la correction')
       }
 
       const results = await response.json()
       setGradingProgress(100)
+
+      const resultsWithSummary = transformResults(results, exam.copies, exam)
+      resultsWithSummary.generatedAt = new Date().toISOString()
       
-      const resultsWithTimestamp = {
-        ...results,
-        generatedAt: new Date().toISOString()
-      }
-      sessionStorage.setItem(`correction_${id}`, JSON.stringify(resultsWithTimestamp))
+      sessionStorage.setItem(`correction_${id}`, JSON.stringify(resultsWithSummary))
       
       await addNotification({
         title: 'Correction terminée',
