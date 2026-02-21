@@ -243,11 +243,16 @@ export const EquipeDetail: React.FC = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
-                        m.role === 'admin' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'
-                      }`}>
-                        {m.role}
-                      </span>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
+                          m.role === 'admin' ? 'bg-amber-100 text-amber-600 border border-amber-200' : 'bg-blue-100 text-blue-600 border border-blue-200'
+                        }`}>
+                          {m.role === 'admin' ? 'Administrateur' : 'Collaborateur'}
+                        </span>
+                        {m.utilisateur_id === user?.id && (
+                          <span className="text-[8px] font-google-bold text-primary bg-primary/5 px-1.5 rounded-md">Moi</span>
+                        )}
+                      </div>
                       <ChevronDown size={14} className={`text-secondary transition-transform ${expandedMember === m.utilisateur_id ? 'rotate-180' : ''}`} />
                     </div>
                   </div>

@@ -166,7 +166,18 @@ export const TeamsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       const { error: memberError } = await supabase
         .from('equipe_membres')
-        .insert({ equipe_id: teamData.id, utilisateur_id: user.id, role: 'admin' })
+        .insert({ 
+          equipe_id: teamData.id, 
+          utilisateur_id: user.id, 
+          role: 'admin',
+          permissions: {
+            can_view_details: true,
+            can_add_copies: true,
+            can_correct: true,
+            can_validate: true,
+            can_export: true
+          }
+        })
 
       if (memberError) throw memberError
 
@@ -323,6 +334,7 @@ export const TeamsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         .select(`
           utilisateur_id,
           role,
+          permissions,
           utilisateurs:utilisateur_id (nom, email)
         `)
         .eq('equipe_id', teamId)
