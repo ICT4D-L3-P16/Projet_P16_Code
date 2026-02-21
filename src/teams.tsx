@@ -213,6 +213,25 @@ export const TeamsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const acceptInvitation = async (invitationId: string): Promise<boolean> => {
     if (!user) return false
     try {
+      // 0. S'assurer que l'utilisateur existe dans la table 'utilisateurs'
+      // Pattern identique à exams.tsx pour garantir la cohérence des FK
+      const { data: userData, error: userCheckError } = await supabase
+        .from('utilisateurs')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      if (!userData || userCheckError) {
+        await supabase
+          .from('utilisateurs')
+          .insert({
+            id: user.id,
+            email: user.email,
+            nom: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Utilisateur',
+            role: 'enseignant'
+          })
+      }
+
       const { data: invite, error: fetchError } = await supabase
         .from('invitations')
         .select('*')
@@ -261,9 +280,17 @@ export const TeamsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         .select('*')
         .eq('token', token)
         .eq('statut', 'en_attente')
-        .single()
+        .maybeSingle()
 
-      if (fetchError) throw fetchError
+      if (fetchError) {
+        console.error('Error fetching invitation by token:', fetchError)
+        throw fetchError
+      }
+
+      if (!invite) {
+        console.warn('Invitation not found or already accepted for token:', token)
+        return false
+      }
 
       // Use the existing accept logic
       return await acceptInvitation(invite.id)

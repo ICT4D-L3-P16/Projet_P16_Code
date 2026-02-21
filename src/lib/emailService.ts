@@ -21,19 +21,32 @@ export const sendEmail = async (params: EmailParams): Promise<boolean> => {
   return true;
 };
 
-export const sendInvitationEmail = async (email: string, teamName: string, examTitle: string, inviteUrl: string) => {
-  return sendEmail({
-    to: email,
-    subject: `Invitation à collaborer sur l'examen : ${examTitle}`,
-    body: `
-      Bonjour,
-      
-      Vous avez été invité à rejoindre l'équipe "${teamName}" pour collaborer sur l'examen "${examTitle}".
-      
-      Cliquez sur le lien suivant pour accepter l'invitation :
-      ${inviteUrl}
-      
-      Si vous n'avez pas de compte SAJE, vous pourrez en créer un après avoir cliqué sur le lien.
-    `
-  });
+export const sendInvitationEmail = async (email: string, teamName: string, examTitle: string, inviteUrl: string): Promise<boolean> => {
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/mail/invite`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email,
+        teamName,
+        contextName: examTitle,
+        inviteLink: inviteUrl
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Erreur lors de l\'envoi du mail');
+    }
+
+    const result = await response.json();
+    return result.success === true;
+  } catch (error) {
+    console.error('[EmailService] Erreur d\'envoi:', error);
+    return false;
+  }
 };
