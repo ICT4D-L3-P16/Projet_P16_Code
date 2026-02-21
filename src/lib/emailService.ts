@@ -44,7 +44,8 @@ export const sendInvitationEmail = async (email: string, teamName: string, examT
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || 'Erreur lors de l\'envoi du mail');
+      const detailedError = errorData.details ? `${errorData.error} : ${errorData.details}` : (errorData.error || 'Erreur lors de l\'envoi du mail');
+      throw new Error(detailedError);
     }
 
     const result = await response.json();
