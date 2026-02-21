@@ -124,7 +124,7 @@ export const ExamsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               .from('corriges')
               .select('*')
               .eq('epreuve_id', epreuveId)
-              .single()
+              .maybeSingle()
 
             if (corrigeData) {
               corrige = {
@@ -194,7 +194,7 @@ export const ExamsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         .from('utilisateurs')
         .select('id')
         .eq('id', user.id)
-        .single()
+        .maybeSingle()
 
       // Si l'utilisateur n'existe pas dans la table utilisateurs, le créer
       if (utilisateurCheckError || !utilisateurData) {
@@ -491,7 +491,7 @@ export const ExamsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           .from('epreuves')
           .select('id')
           .eq('examen_id', examId)
-          .single()
+          .maybeSingle()
 
         if (existingEpreuve) {
           await supabase
@@ -519,7 +519,7 @@ export const ExamsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           .from('epreuves')
           .select('id')
           .eq('examen_id', examId)
-          .single()
+          .maybeSingle()
         
         if (!epreuveData) throw new Error("Veuillez d'abord uploader une épreuve")
 
@@ -527,7 +527,7 @@ export const ExamsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           .from('corriges')
           .select('id')
           .eq('epreuve_id', epreuveData.id)
-          .single()
+          .maybeSingle()
 
         if (existingCorrige) {
           await supabase

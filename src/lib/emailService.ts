@@ -24,6 +24,10 @@ export const sendEmail = async (params: EmailParams): Promise<boolean> => {
 export const sendInvitationEmail = async (email: string, teamName: string, examTitle: string, inviteUrl: string): Promise<boolean> => {
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
   
+  if (window.location.hostname !== 'localhost' && (API_BASE_URL.includes('localhost') || API_BASE_URL.includes('127.0.0.1'))) {
+    console.warn('[EmailService] Attention : Le site est déployé mais l\'API pointe vers localhost. L\'envoi d\'e-mail échouera probablement.');
+  }
+
   try {
     const response = await fetch(`${API_BASE_URL}/api/mail/invite`, {
       method: 'POST',

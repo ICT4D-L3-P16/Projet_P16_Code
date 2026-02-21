@@ -247,7 +247,7 @@ export const TeamsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         .from('invitations')
         .select('*')
         .eq('id', invitationId)
-        .single()
+        .maybeSingle()
 
       if (fetchError) throw fetchError
 
