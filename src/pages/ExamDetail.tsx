@@ -31,7 +31,7 @@ import { transformResults } from '../lib/correctionApi'
 const ExamDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { exams, addStudentFiles, deleteExam, isLoading, updateExamStatus } = useExams()
+  const { exams, addStudentFiles, deleteExam, isLoading, updateExamStatus, updateExamDocuments, refreshExams } = useExams()
   const { addNotification } = useNotifications()
   const [files, setFiles] = useState<FileList | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -45,6 +45,7 @@ const ExamDetail: React.FC = () => {
   const [gradingProgress, setGradingProgress] = useState(0)
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
+  const [updatingDoc, setUpdatingDoc] = useState<'epreuve' | 'corrige' | null>(null)
 
   // Team & Permissions mapping
   const { user } = useAuth()
@@ -302,6 +303,22 @@ const ExamDetail: React.FC = () => {
     }
   }
 
+  const handleDocumentUpdate = async (type: 'epreuve' | 'corrige', file: File) => {
+    if (!id || !exam) return
+    setUpdatingDoc(type)
+    try {
+      const success = await updateExamDocuments(id, type, file)
+      if (success) {
+        alert(`${type.charAt(0).toUpperCase() + type.slice(1)} mis à jour avec succès`)
+      }
+    } catch (error) {
+      console.error(error)
+      alert('Erreur lors de la mise à jour du document')
+    } finally {
+      setUpdatingDoc(null)
+    }
+  }
+
   if (isLoading || !exam) {
     return (
       <div className="flex items-center justify-center p-20">
@@ -368,7 +385,7 @@ const ExamDetail: React.FC = () => {
               </button>
             )}
             
-            {!exam.team_id && exam.utilisateur_id === user?.id && (
+            {!exam?.team_id && exam?.utilisateur_id === user?.id && (
               <button 
                 onClick={() => setShowInviteModal(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-surface border border-border-subtle hover:bg-background rounded-xl text-sm font-google-bold transition-all"
@@ -527,38 +544,86 @@ const ExamDetail: React.FC = () => {
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Epreuve Card */}
-                <div className="group p-6 bg-background border border-border-subtle rounded-[2rem] hover:border-primary/30 transition-all flex flex-col justify-between min-h-[160px]">
+                <div 
+                  onClick={() => document.getElementById('epreuve-upload')?.click()}
+                  className={`group p-6 bg-background border border-border-subtle rounded-[2rem] hover:border-primary/30 transition-all flex flex-col justify-between min-h-[160px] cursor-pointer relative ${updatingDoc === 'epreuve' ? 'opacity-50' : ''}`}
+                >
+                  <input 
+                    type="file" 
+                    id="epreuve-upload" 
+                    className="hidden" 
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) handleDocumentUpdate('epreuve', file)
+                    }}
+                  />
+                  {updatingDoc === 'epreuve' && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-[2rem] z-10">
+                      <Loader2 className="animate-spin text-primary" size={24} />
+                    </div>
+                  )}
                   <div className="flex items-start justify-between">
                     <div className="p-3 bg-primary/5 text-primary rounded-2xl group-hover:scale-110 transition-transform">
                       <FileText size={24} />
                     </div>
                     {exam.epreuve?.cheminFichier && (
-                      <a href={exam.epreuve.cheminFichier} target="_blank" rel="noreferrer" className="p-2 text-secondary hover:text-textcol hover:bg-surface rounded-lg">
+                      <a 
+                        href={exam.epreuve.cheminFichier} 
+                        target="_blank" 
+                        rel="noreferrer" 
+                        onClick={(e) => e.stopPropagation()}
+                        className="p-2 text-secondary hover:text-textcol hover:bg-surface rounded-lg"
+                      >
                         <Download size={18} />
                       </a>
                     )}
                   </div>
                   <div>
                     <h3 className="font-google-bold text-textcol">Épreuve</h3>
-                    <p className="text-xs text-secondary mt-1">{exam.epreuve?.cheminFichier ? 'Document disponible' : 'Non renseignée'}</p>
+                    <p className="text-xs text-secondary mt-1">{exam.epreuve?.cheminFichier ? 'Document disponible' : 'Cliquer pour uploader'}</p>
                   </div>
                 </div>
 
                 {/* Corrige Card */}
-                <div className="group p-6 bg-background border border-border-subtle rounded-[2rem] hover:border-amber-300 transition-all flex flex-col justify-between min-h-[160px]">
+                <div 
+                  onClick={() => document.getElementById('corrige-upload')?.click()}
+                  className={`group p-6 bg-background border border-border-subtle rounded-[2rem] hover:border-amber-300 transition-all flex flex-col justify-between min-h-[160px] cursor-pointer relative ${updatingDoc === 'corrige' ? 'opacity-50' : ''}`}
+                >
+                  <input 
+                    type="file" 
+                    id="corrige-upload" 
+                    className="hidden" 
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) handleDocumentUpdate('corrige', file)
+                    }}
+                  />
+                  {updatingDoc === 'corrige' && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-[2rem] z-10">
+                      <Loader2 className="animate-spin text-amber-600" size={24} />
+                    </div>
+                  )}
                   <div className="flex items-start justify-between">
                     <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl group-hover:scale-110 transition-transform">
                       <FileCheck size={24} />
                     </div>
                     {exam.corrige?.cheminFichier && (
-                      <a href={exam.corrige.cheminFichier} target="_blank" rel="noreferrer" className="p-2 text-secondary hover:text-textcol hover:bg-surface rounded-lg">
+                      <a 
+                        href={exam.corrige.cheminFichier} 
+                        target="_blank" 
+                        rel="noreferrer" 
+                        onClick={(e) => e.stopPropagation()}
+                        className="p-2 text-secondary hover:text-textcol hover:bg-surface rounded-lg"
+                      >
                         <Download size={18} />
                       </a>
                     )}
                   </div>
                   <div>
                     <h3 className="font-google-bold text-textcol">Corrigé type</h3>
-                    <p className="text-xs text-secondary mt-1">{exam.corrige?.cheminFichier ? 'Document disponible' : 'Non renseigné'}</p>
+                    <p className="text-xs text-secondary mt-1">{exam.corrige?.cheminFichier ? 'Document disponible' : 'Cliquer pour uploader'}</p>
                   </div>
                 </div>
               </div>
@@ -797,18 +862,19 @@ const ExamDetail: React.FC = () => {
                  <label className="block text-sm font-google-bold text-textcol mb-3">Équipe associée</label>
                  <select 
                    value={exam.team_id || ''}
-                   onChange={async (e) => {
-                     const teamId = e.target.value || null
-                     if (window.confirm("Voulez-vous vraiment changer l'équipe de cet examen ?")) {
-                       const success = await changeExamTeam(exam.id, teamId)
-                       if (success) {
-                         alert("L'équipe a été mise à jour.")
-                         setShowSettingsModal(false)
-                       } else {
-                         alert("Erreur lors de la mise à jour.")
-                       }
-                     }
-                   }}
+                    onChange={async (e) => {
+                      const teamId = e.target.value || null
+                      if (window.confirm("Voulez-vous vraiment changer l'équipe de cet examen ?")) {
+                        const success = await changeExamTeam(exam.id, teamId)
+                        if (success) {
+                          await refreshExams()
+                          alert("L'équipe a été mise à jour.")
+                          setShowSettingsModal(false)
+                        } else {
+                          alert("Erreur lors de la mise à jour.")
+                        }
+                      }
+                    }}
                    className="w-full px-4 py-3 rounded-xl border border-border-subtle bg-background outline-none transition-all"
                  >
                    <option value="">Aucune équipe (Privé)</option>

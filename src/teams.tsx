@@ -37,7 +37,7 @@ type TeamsContextType = {
   userInvitations: Invitation[]
   sharedExams: any[]
   createTeam: (name: string) => Promise<Team | null>
-  inviteToExam: (params: { examId: string, teamId: string, email?: string, permissions: TeamPermission }) => Promise<string | null>
+  inviteToExam: (params: { examId?: string, teamId: string, email?: string, permissions: TeamPermission }) => Promise<string | null>
   acceptInvitation: (invitationId: string) => Promise<boolean>
   acceptInvitationByToken: (token: string) => Promise<boolean>
   refuseInvitation: (invitationId: string) => Promise<boolean>
@@ -178,16 +178,17 @@ export const TeamsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }
 
-  const inviteToExam = async ({ examId, teamId, email, permissions }: { examId: string, teamId: string, email?: string, permissions: TeamPermission }): Promise<string | null> => {
+  const inviteToExam = async ({ examId, teamId, email, permissions }: { examId?: string, teamId: string, email?: string, permissions: TeamPermission }): Promise<string | null> => {
     if (!user) return null
     try {
       const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+      
       const { error } = await supabase
         .from('invitations')
         .insert({
           equipe_id: teamId,
-          examen_id: examId,
-          email,
+          examen_id: examId || null,
+          email: email?.trim() || null,
           token,
           createur_id: user.id,
           permissions,
@@ -196,16 +197,11 @@ export const TeamsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       if (error) throw error
 
-      // Link exam to team immediately so it appears in the team space
-      await supabase
-        .from('equipe_examens')
-        .upsert({ equipe_id: teamId, examen_id: examId })
-
-      await addNotification({
-         title: 'Invitation envoyée',
-         message: 'Une invitation pour collaborer a été créée.',
-         type: 'info'
-      })
+      if (examId) {
+        await supabase
+          .from('equipe_examens')
+          .upsert({ equipe_id: teamId, examen_id: examId })
+      }
 
       return token
     } catch (err) {
@@ -351,12 +347,24 @@ export const TeamsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const changeExamTeam = async (examId: string, teamId: string | null): Promise<boolean> => {
     try {
-      const { error } = await supabase.rpc('transfer_exam_to_team', {
-        target_exam_id: examId,
-        target_team_id: teamId
-      })
+      // 1. Remove existing relation
+      await supabase
+        .from('equipe_examens')
+        .delete()
+        .eq('examen_id', examId)
+
+      // 2. Add new relation if teamId is provided
+      if (teamId) {
+        const { error } = await supabase
+          .from('equipe_examens')
+          .insert({
+            examen_id: examId,
+            equipe_id: teamId
+          })
+        
+        if (error) throw error
+      }
       
-      if (error) throw error
       await loadAllData()
       return true
     } catch (err) {

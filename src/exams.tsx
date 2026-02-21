@@ -65,6 +65,7 @@ type ExamsContextType = {
   deleteExam: (examId: string) => Promise<boolean>
   updateExamStatus: (examId: string, status: Exam['statut']) => Promise<boolean>
   validateExam: (examId: string) => Promise<boolean>
+  updateExamDocuments: (examId: string, type: 'epreuve' | 'corrige', file: File) => Promise<boolean>
 }
 
 const ExamsContext = createContext<ExamsContextType | undefined>(undefined)
@@ -466,6 +467,97 @@ export const ExamsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return updateExamStatus(examId, 'valide')
   }
 
+  const updateExamDocuments = async (examId: string, type: 'epreuve' | 'corrige', file: File): Promise<boolean> => {
+    if (!user) return false
+    try {
+      const fileName = `${Date.now()}_${file.name}`
+      const folder = type === 'epreuve' ? 'epreuves' : 'corriges'
+      const filePath = `${user.id}/${examId}/${fileName}`
+
+      // 1. Upload file
+      const { error: uploadError } = await supabase.storage
+        .from(folder)
+        .upload(filePath, file)
+
+      if (uploadError) throw uploadError
+
+      const { data: publicUrlData } = supabase.storage
+        .from(folder)
+        .getPublicUrl(filePath)
+
+      if (type === 'epreuve') {
+        // Find if epreuve exists
+        const { data: existingEpreuve } = await supabase
+          .from('epreuves')
+          .select('id')
+          .eq('examen_id', examId)
+          .single()
+
+        if (existingEpreuve) {
+          await supabase
+            .from('epreuves')
+            .update({
+              nom_fichier: file.name,
+              chemin_fichier: publicUrlData.publicUrl
+            })
+            .eq('id', existingEpreuve.id)
+        } else {
+          await supabase
+            .from('epreuves')
+            .insert({
+              examen_id: examId,
+              code_epreuve: `EPR-${examId.slice(0, 8)}`,
+              nom_fichier: file.name,
+              chemin_fichier: publicUrlData.publicUrl,
+              duree_minutes: 60
+            })
+        }
+      } else {
+        // type === 'corrige'
+        // Need epreuve_id
+        const { data: epreuveData } = await supabase
+          .from('epreuves')
+          .select('id')
+          .eq('examen_id', examId)
+          .single()
+        
+        if (!epreuveData) throw new Error("Veuillez d'abord uploader une épreuve")
+
+        const { data: existingCorrige } = await supabase
+          .from('corriges')
+          .select('id')
+          .eq('epreuve_id', epreuveData.id)
+          .single()
+
+        if (existingCorrige) {
+          await supabase
+            .from('corriges')
+            .update({
+              nom_fichier: file.name,
+              chemin_fichier: publicUrlData.publicUrl
+            })
+            .eq('id', existingCorrige.id)
+        } else {
+          await supabase
+            .from('corriges')
+            .insert({
+              epreuve_id: epreuveData.id,
+              nom_fichier: file.name,
+              chemin_fichier: publicUrlData.publicUrl,
+              total_points: 0
+            })
+        }
+      }
+
+      await refreshExams()
+      return true
+    } catch (err: any) {
+      console.error('Erreur lors de la mise à jour du document:', err)
+      setError(err.message || 'Erreur lors de la mise à jour du document')
+      return false
+    }
+  }
+
   return (
     <ExamsContext.Provider
       value={{
@@ -477,7 +569,8 @@ export const ExamsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         refreshExams,
         deleteExam,
         updateExamStatus,
-        validateExam
+        validateExam,
+        updateExamDocuments
       }}
     >
       {children}

@@ -7,10 +7,22 @@ import {
   UserPlus,
   Trash2,
   Settings,
-  Loader2
+  Loader2,
+  ChevronDown,
+  Shield,
+  Zap,
+  CheckCircle2,
+  Download,
+  Plus,
+  X,
+  Calendar,
+  Clock
 } from 'lucide-react'
 import { useTeams } from '../../teams'
 import { useAuth } from '../../context/AuthContext'
+import { useExams } from '../../exams'
+import { InviteModal } from './InviteModal'
+import { supabase } from '../../lib/supabaseClient'
 
 export const EquipeDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>()
@@ -21,6 +33,61 @@ export const EquipeDetail: React.FC = () => {
   const [members, setMembers] = useState<any[]>([])
   const [exams, setExams] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [expandedMember, setExpandedMember] = useState<string | null>(null)
+  const [showInviteModal, setShowInviteModal] = useState(false)
+  const [showCreateExamModal, setShowCreateExamModal] = useState(false)
+
+  // Exam form state
+  const { createExam } = useExams()
+  const [titre, setTitre] = useState('')
+  const [classe, setClasse] = useState('')
+  const [matiere, setMatiere] = useState('')
+  const [dateExamen, setDateExamen] = useState('')
+  const [dureeMinutes, setDureeMinutes] = useState(60)
+  const [epreuveFile, setEpreuveFile] = useState<File | null>(null)
+  const [correctionFile, setCorrectionFile] = useState<File | null>(null)
+  const [creating, setCreating] = useState(false)
+
+  const truncateEmail = (email: string) => {
+    if (!email) return ''
+    const parts = email.split('@')
+    if (parts.length !== 2) return email
+    const [name, domain] = parts
+    if (name.length <= 5) return email
+    return `${name.slice(0, 3)}...${name.slice(-1)}@${domain}`
+  }
+
+  function resetForm() {
+    setTitre('')
+    setClasse('')
+    setMatiere('')
+    setDateExamen('')
+    setDureeMinutes(60)
+    setEpreuveFile(null)
+    setCorrectionFile(null)
+  }
+
+  const handleCreateExam = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!titre || !matiere || !dateExamen || !id) return
+    setCreating(true)
+    try {
+      const exam = await createExam({ 
+        titre, classe, matiere, dateExamen, dureeMinutes, epreuveFile, correctionFile 
+      })
+      if (exam) {
+        // Link to team
+        await supabase.from('equipe_examens').upsert({ equipe_id: id, examen_id: exam.id })
+        resetForm()
+        setShowCreateExamModal(false)
+        loadData()
+      }
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setCreating(false)
+    }
+  }
 
   const team = teams.find(t => t.id === id)
 
@@ -106,6 +173,13 @@ export const EquipeDetail: React.FC = () => {
           <div className="bg-surface border border-border-subtle rounded-[2.5rem] p-8 card-shadow shadow-sm">
             <div className="flex items-center justify-between mb-8">
               <h2 className="text-2xl font-google-bold text-textcol">Examens de l'équipe</h2>
+              <button 
+                onClick={() => setShowCreateExamModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl text-xs font-google-bold hover:brightness-110 transition-all shadow-lg shadow-primary/20"
+              >
+                <Plus size={14} />
+                Nouvel examen
+              </button>
             </div>
 
             {exams.length === 0 ? (
@@ -149,27 +223,67 @@ export const EquipeDetail: React.FC = () => {
 
             <div className="space-y-4">
               {members.map((m: any) => (
-                <div key={m.utilisateur_id} className="flex items-center justify-between p-3 bg-background rounded-2xl border border-border-subtle">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
-                      {m.utilisateurs?.nom?.charAt(0) || 'U'}
+                <div key={m.utilisateur_id} className="space-y-2">
+                  <div
+                    onClick={() => setExpandedMember(expandedMember === m.utilisateur_id ? null : m.utilisateur_id)}
+                    className="flex items-center justify-between p-3 bg-background rounded-2xl border border-border-subtle cursor-pointer hover:border-primary/30 transition-all group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
+                        {m.utilisateurs?.nom?.charAt(0) || 'U'}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-google-bold text-textcol truncate">{m.utilisateurs?.nom || 'Utilisateur'}</p>
+                        <p 
+                          className="text-[10px] text-secondary truncate cursor-help" 
+                          title={m.utilisateurs?.email}
+                        >
+                          {truncateEmail(m.utilisateurs?.email)}
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-google-bold text-textcol truncate">{m.utilisateurs?.nom || 'Utilisateur'}</p>
-                      <p className="text-[10px] text-secondary truncate">{m.utilisateurs?.email}</p>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
+                        m.role === 'admin' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'
+                      }`}>
+                        {m.role}
+                      </span>
+                      <ChevronDown size={14} className={`text-secondary transition-transform ${expandedMember === m.utilisateur_id ? 'rotate-180' : ''}`} />
                     </div>
                   </div>
-                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
-                    m.role === 'admin' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'
-                  }`}>
-                    {m.role}
-                  </span>
+
+                  {expandedMember === m.utilisateur_id && (
+                    <div className="mx-2 p-4 bg-surface border border-border-subtle rounded-xl space-y-3 animate-in slide-in-from-top-2 duration-200">
+                      <h4 className="text-[10px] font-google-bold text-secondary uppercase flex items-center gap-2">
+                        <Shield size={12} />
+                        Permissions détaillées
+                      </h4>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { key: 'can_view_details', label: 'Lecture', icon: <FileText size={10} /> },
+                          { key: 'can_add_copies', label: 'Ajout', icon: <Plus size={10} /> },
+                          { key: 'can_correct', label: 'Correction', icon: <Zap size={10} /> },
+                          { key: 'can_validate', label: 'Validation', icon: <CheckCircle2 size={10} /> },
+                          { key: 'can_export', label: 'Export', icon: <Download size={10} /> },
+                        ].map(p => {
+                          const hasPerm = m.permissions?.[p.key] || m.role === 'admin'
+                          return (
+                            <div key={p.key} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border ${hasPerm ? 'bg-primary/5 border-primary/10 text-primary' : 'bg-background border-transparent text-secondary opacity-50'}`}>
+                              {p.icon}
+                              <span className="text-[10px] font-medium">{p.label}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
 
             {isCreator && (
               <button 
+                onClick={() => setShowInviteModal(true)}
                 className="w-full mt-6 py-3 bg-primary/5 text-primary border border-primary/20 rounded-xl text-xs font-google-bold flex items-center justify-center gap-2 hover:bg-primary hover:text-white transition-all"
               >
                 <UserPlus size={14} />
@@ -192,6 +306,85 @@ export const EquipeDetail: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Modals */}
+      {showInviteModal && (
+        <InviteModal 
+          onClose={() => setShowInviteModal(false)}
+          initialTeamId={id}
+        />
+      )}
+
+      {showCreateExamModal && (
+        <div className="fixed inset-0 bg-accent/20 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
+          <div className="bg-surface rounded-3xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl relative border border-border-subtle">
+            <button
+              onClick={() => setShowCreateExamModal(false)}
+              className="absolute top-6 right-6 p-2 text-secondary hover:bg-background rounded-full transition-colors"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="mb-8 text-left">
+              <h2 className="text-2xl font-google-bold text-textcol">Nouvel examen d'équipe</h2>
+              <p className="text-secondary text-sm">L'examen sera directement rattaché à l'équipe "{team.nom}".</p>
+            </div>
+
+            <form className="space-y-6" onSubmit={handleCreateExam}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-google-bold text-textcol mb-2">Titre de l'examen</label>
+                  <input
+                    value={titre}
+                    onChange={(e) => setTitre(e.target.value)}
+                    type="text"
+                    required
+                    placeholder="Ex: Examen de Mathématiques"
+                    className="w-full px-4 py-3 rounded-xl border border-border-subtle bg-background focus:ring-2 focus:ring-primary/20 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-google-bold text-textcol mb-2">Matière</label>
+                  <input
+                    value={matiere}
+                    onChange={(e) => setMatiere(e.target.value)}
+                    type="text"
+                    required
+                    className="w-full px-4 py-3 rounded-xl border border-border-subtle bg-background focus:ring-2 focus:ring-primary/20 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-google-bold text-textcol mb-2">Date</label>
+                  <input
+                    value={dateExamen}
+                    onChange={(e) => setDateExamen(e.target.value)}
+                    type="date"
+                    required
+                    className="w-full px-4 py-3 rounded-xl border border-border-subtle bg-background focus:ring-2 focus:ring-primary/20 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateExamModal(false)}
+                  className="flex-1 py-3 border border-border-subtle rounded-xl text-sm font-google-bold"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={creating}
+                  className="flex-1 py-3 bg-primary text-white rounded-xl font-google-bold text-sm shadow-xl shadow-primary/20 disabled:opacity-50"
+                >
+                  {creating ? 'Création...' : 'Créer l\'examen'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -14,20 +14,24 @@ import {
 } from 'lucide-react'
 import { useTeams } from '../../teams'
 import type { TeamPermission } from '../../teams'
+import { sendInvitationEmail } from '../../lib/emailService'
 
 interface InviteModalProps {
-  examId: string
-  examTitle: string
+  examId?: string
+  examTitle?: string
   onClose: () => void
+  initialTeamId?: string
 }
 
-export const InviteModal: React.FC<InviteModalProps> = ({ examId, examTitle, onClose }) => {
+export const InviteModal: React.FC<InviteModalProps> = ({ examId, examTitle, onClose, initialTeamId }) => {
   const { teams, inviteToExam } = useTeams()
-  const [email, setEmail] = useState('')
-  const [selectedTeam, setSelectedTeam] = useState('')
+  const [emailInput, setEmailInput] = useState('')
+  const [selectedTeam, setSelectedTeam] = useState(initialTeamId || '')
   const [inviting, setInviting] = useState(false)
   const [inviteToken, setInviteToken] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [inviteCount, setInviteCount] = useState(0)
+  const [error, setError] = useState<string | null>(null)
 
   const [permissions, setPermissions] = useState<TeamPermission>({
     can_add_copies: false,
@@ -46,15 +50,57 @@ export const InviteModal: React.FC<InviteModalProps> = ({ examId, examTitle, onC
       alert('Veuillez sélectionner une équipe')
       return
     }
+
+    const team = teams.find(t => t.id === selectedTeam)
+    const emails = emailInput.split(',').map(e => e.trim()).filter(e => e.length > 0)
+    
+    if (emails.length > 5) {
+      setError('Limite de 5 invitations par envoi dépassée.')
+      return
+    }
+
     setInviting(true)
-    const token = await inviteToExam({
-      examId,
-      teamId: selectedTeam,
-      email: email.trim() || undefined,
-      permissions
-    })
-    setInviteToken(token)
-    setInviting(false)
+    setError(null)
+    let lastToken = null
+    let count = 0
+
+    try {
+      if (emails.length === 0) {
+        lastToken = await inviteToExam({
+          examId,
+          teamId: selectedTeam,
+          permissions
+        })
+        count = 1
+      } else {
+        for (const email of emails) {
+          const token = await inviteToExam({
+            examId,
+            teamId: selectedTeam,
+            email,
+            permissions
+          })
+          if (token) {
+            lastToken = token
+            count++
+            await sendInvitationEmail(
+              email, 
+              team?.nom || 'Équipe pédagogique', 
+              examTitle || 'Collaboration d\'équipe', 
+              `${window.location.origin}/join/${token}`
+            )
+          }
+        }
+      }
+
+      setInviteToken(lastToken)
+      setInviteCount(count)
+    } catch (error) {
+      console.error('Erreur lors de l\'invitation:', error)
+      setError('Une erreur est survenue lors de l\'envoi.')
+    } finally {
+      setInviting(false)
+    }
   }
 
   const copyLink = () => {
@@ -78,9 +124,9 @@ export const InviteModal: React.FC<InviteModalProps> = ({ examId, examTitle, onC
                <X size={24} />
              </button>
           </div>
-          <div className="hidden md:block">
-            <h2 className="text-2xl font-google-bold text-textcol">Partager l'examen</h2>
-            <p className="text-sm text-secondary mt-1">"{examTitle}"</p>
+          <div className="hidden md:block text-left">
+            <h2 className="text-2xl font-google-bold text-textcol">Partager {examId ? 'l\'examen' : 'l\'accès'}</h2>
+            {examTitle && <p className="text-sm text-secondary mt-1">"{examTitle}"</p>}
           </div>
 
           <div className="space-y-4">
@@ -105,7 +151,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ examId, examTitle, onC
                   <div className={`mt-0.5 p-1.5 rounded-lg ${permissions[item.key as keyof TeamPermission] ? 'bg-primary text-white' : 'bg-surface text-secondary border border-border-subtle'}`}>
                     {item.icon}
                   </div>
-                  <div className="flex-1">
+                  <div className="flex-1 text-left">
                     <p className={`text-sm font-google-bold ${permissions[item.key as keyof TeamPermission] ? 'text-primary' : 'text-textcol'}`}>{item.label}</p>
                     <p className="text-[10px] text-secondary font-medium">{item.desc}</p>
                   </div>
@@ -130,7 +176,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ examId, examTitle, onC
             {!inviteToken ? (
               <>
                 <div className="space-y-4">
-                  <div>
+                  <div className="text-left">
                     <label className="block text-xs font-google-bold text-secondary uppercase mb-2">1. Sélectionner une équipe</label>
                     <div className="relative">
                       <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary" size={16} />
@@ -147,26 +193,32 @@ export const InviteModal: React.FC<InviteModalProps> = ({ examId, examTitle, onC
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-google-bold text-secondary uppercase mb-2">2. Email (Optionnel)</label>
+                  <div className="text-left">
+                    <label className="block text-xs font-google-bold text-secondary uppercase mb-2">2. Emails (séparés par des virgules)</label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary" size={16} />
                       <input 
                         type="email" 
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="collaborateur@exemple.com"
+                        value={emailInput}
+                        onChange={(e) => setEmailInput(e.target.value)}
+                        placeholder="un@exemple.fr, deux@exemple.com"
                         className="w-full pl-10 pr-4 py-3 bg-surface border border-border-subtle rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none"
                       />
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
+                {error && (
+                  <div className="bg-red-50 border border-red-100 rounded-xl p-3 text-red-600 text-[11px] font-google-bold text-left">
+                    {error}
+                  </div>
+                )}
+
+                <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-left">
                   <div className="flex gap-3">
                     <Zap size={18} className="text-blue-600 shrink-0" />
                     <p className="text-[11px] text-blue-700 leading-relaxed font-medium">
-                      L'invitation créera un lien unique ou enverra un email si l'utilisateur possède déjà un compte.
+                      L'invitation créera un lien unique ou enverra un email si l'utilisateur possède déjà un compte (Max 5 par batch).
                     </p>
                   </div>
                 </div>
@@ -176,7 +228,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ examId, examTitle, onC
                   disabled={inviting || !selectedTeam}
                   className="w-full py-3.5 bg-primary text-white rounded-2xl font-google-bold hover:brightness-110 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:shadow-none"
                 >
-                  {inviting ? 'Génération...' : 'Générer l\'invitation'}
+                  {inviting ? 'Traitement...' : 'Générer l\'invitation'}
                 </button>
               </>
             ) : (
@@ -185,12 +237,18 @@ export const InviteModal: React.FC<InviteModalProps> = ({ examId, examTitle, onC
                   <Check size={32} className="text-green-600" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-google-bold text-textcol">Invitation prête !</h3>
-                  <p className="text-xs text-secondary mt-1">L'invitation a été créée avec succès.</p>
+                  <h3 className="text-lg font-google-bold text-textcol">
+                    {inviteCount > 1 ? `${inviteCount} invitations prêtes !` : 'Invitation prête !'}
+                  </h3>
+                  <p className="text-xs text-secondary mt-1">
+                    {inviteCount > 1 
+                      ? 'Les invitations ont été envoyées par mail.' 
+                      : 'L\'invitation a été créée et envoyée avec succès.'}
+                  </p>
                 </div>
 
                 <div className="space-y-3 text-left">
-                  <label className="block text-xs font-google-bold text-secondary uppercase">Lien d'accès</label>
+                  <label className="block text-xs font-google-bold text-secondary uppercase">Dernier lien généré</label>
                   <div className="flex gap-2">
                     <div className="flex-1 px-4 py-3 bg-surface border border-border-subtle rounded-xl text-xs font-mono truncate text-secondary">
                       {window.location.origin}/join/{inviteToken}
